@@ -174,12 +174,14 @@ void print_clusters(std::vector<std::vector<int> > &clusters){
   }
 }
 
-void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2){
+void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *fp3){
   totaldups += q->l;
   //fprintf(stderr,"do_magic queue->l:%d queue->m:%d chr:%d pos:%d\n",q->l,q->m,q->d[0]->core.tid,q->d[0]->core.pos);
   std::map<int,std::vector<reldata> > mymap;//<-this contains the library::lane::tile info as key. value is vector of reads,xpos,ypos
   bam1_t *b = NULL;
 
+  assert(sam_write1(fp3, hdr, q->d[lrand48() %q->l])>=0);
+  
   //first loop over all reads(these have the same chr/pos, and group these into queues that are pertile,perlib,pereverything)
   for(int i=0;i<q->l;i++){
     b = q->d[i];
@@ -437,6 +439,7 @@ int main(int argc, char **argv){
   samFile *in=NULL;
   samFile *out=NULL;
   samFile *out2=NULL;
+  samFile *out3=NULL;
   FILE *fp = NULL;
   fname=refName=NULL;
   char *fn_out = NULL;
@@ -531,15 +534,19 @@ int main(int argc, char **argv){
   char onam1[2048]="";
   char onam2[2048]="";
   char onam3[2048]="";
+  char onam4[2048]="";
   strcat(onam1,fn_out);
   strcat(onam2,fn_out);
   strcat(onam3,fn_out);
+  strcat(onam4,fn_out);
   if(out_mode[1]=='b'){
     strcat(onam1,".noClusterDuplicates.bam");
     strcat(onam2,".onlyClusterDuplicates.bam");
+    strcat(onam4,".pure.bam");
   }else{
     strcat(onam1,".noClusterDuplicates.cram");
     strcat(onam2,".onlyClusterDuplicates.cram");
+    strcat(onam4,".pure.cram");
   }
   strcat(onam3,".dupstat.txt");
   if ((fp = fopen(onam3, "wb")) == NULL) {
@@ -559,6 +566,10 @@ int main(int argc, char **argv){
     return 1;
   }
 
+  if ((out3 = sam_open_format(onam4, out_mode, dingding2)) == 0) {
+    fprintf(stderr,"Error opening file for writing\n");
+    return 1;
+  }
 
   if(nthreads>1){
     if (!(p.pool = hts_tpool_init(nthreads))) {
@@ -577,6 +588,7 @@ int main(int argc, char **argv){
   bam_hdr_t  *hdr = sam_hdr_read(in);
   assert(sam_hdr_write(out, hdr) == 0);
   assert(sam_hdr_write(out2, hdr) == 0);
+  assert(sam_hdr_write(out3, hdr) == 0);
   
   bam1_t *b = bam_init1();
 
@@ -588,11 +600,12 @@ int main(int argc, char **argv){
     //then we simply write it to the output
     if(queue->l==1 && queue->d[0]->core.pos!=b->core.pos){
       assert(sam_write1(out, hdr, queue->d[0])>=0);
+      assert(sam_write1(out3, hdr, queue->d[0])>=0);
       queue->l =0;
     }
     if(queue->l>1 &&(queue->d[0]->core.tid!=b->core.tid ||(queue->d[0]->core.pos!=b->core.pos))){
       //      fprintf(stderr,"calling do_magic\n");
-      do_magic(queue,hdr,out,out2);
+      do_magic(queue,hdr,out,out2,out3);
       queue->l =0;
     }
 
@@ -601,10 +614,11 @@ int main(int argc, char **argv){
 
     bam_copy1(queue->d[queue->l++],b);
   }
-  do_magic(queue,hdr,out,out2);
+  do_magic(queue,hdr,out,out2,out3);
   queue->l;
   assert(sam_close(out)==0);
   assert(sam_close(out2)==0);
+  assert(sam_close(out3)==0);
   assert(sam_close(in)==0);
   for(int i=0;i<queue->m;i++)
     bam_destroy1(queue->d[i]);
@@ -618,7 +632,7 @@ int main(int argc, char **argv){
   bam_destroy1(b);
   hts_opt_free((hts_opt *)dingding2->specific);
   free(dingding2);
-  fprintf(stderr,"    Dumpingfiles:\t\'%s\'\n\t\t\t\'%s\'\n\t\t\t\'%s\'\n",onam1,onam2,onam3);
+  fprintf(stderr,"    Dumpingfiles:\t\'%s\'\n\t\t\t\'%s\'\n\t\t\t\'%s\'\n\t\t\t\'%s\'\n",onam1,onam2,onam3,onam4);
   free(fn_out);
   free(fname);
   fprintf(stderr,
