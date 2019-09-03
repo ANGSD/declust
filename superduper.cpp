@@ -176,7 +176,7 @@ void print_clusters(std::vector<std::vector<int> > &clusters){
 
 void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2){
   totaldups += q->l;
-  //  fprintf(stderr,"do_magic queue->l:%d queue->m:%d chr:%d pos:%d\n",q->l,q->m,q->d[0]->core.tid,q->d[0]->core.pos);
+  //fprintf(stderr,"do_magic queue->l:%d queue->m:%d chr:%d pos:%d\n",q->l,q->m,q->d[0]->core.tid,q->d[0]->core.pos);
   std::map<int,std::vector<reldata> > mymap;//<-this contains the library::lane::tile info as key. value is vector of reads,xpos,ypos
   bam1_t *b = NULL;
 
@@ -204,11 +204,15 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2){
     if(char2int.find(lb)==char2int.end())
       char2int[strdup(lb)] = char2int.size();
     int libid = char2int.find(lb)->second;
-    //[lib,lane,tile]
+    int strand = bam_is_rev(b);
+    
+    //[lib,lane,strand,tile]
     //tile 4digits
+    //strand 1 digit
     //lane 1digit
-    //lib*10000+lane*1000+tile
-    int key=libid*10000+lane*1000+tile;
+    //lib*1000000+strand*100000+lane*10000+tile
+    int key=libid*1000000+strand*10000+lane*10000+tile;
+    key = key*1000+b->core.l_qseq;//<- maybe not do this if we dont care of length of reads
     std::map<int,std::vector<reldata> >::iterator it =mymap.find(key);
     if(it==mymap.end()){
       std::vector<reldata> rd;
@@ -234,7 +238,7 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2){
   for(std::map<int,std::vector<reldata> >::iterator it=mymap.begin();it!=mymap.end();it++) {
     //    fprintf(stderr,"key:%d\n",it->first);
     std::vector<reldata> &rd=it->second;
-    //only one read in lane,lib,tile
+    //only one read in lane,lib,strand,tile
     if(rd.size()==1){
       pcrdups++;
       assert(sam_write1(fp, hdr,rd[0].d)>=0);      
@@ -577,6 +581,7 @@ int main(int argc, char **argv){
   bam1_t *b = bam_init1();
 
   int ret;
+  
   while(((ret=sam_read1(in,hdr,b)))>0){
     nproc++;
     //catch case where there is one read in queue, and the next read is a new position
