@@ -202,10 +202,13 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *fp3){
     int tile = atoi(strtok(NULL,"\n\t:"));
     point.xs = atoi(strtok(NULL,"\n\t:"));
     point.ys = atoi(strtok(NULL,"\n\t:"));
+    int libid = 0;
     char *lb = bam_get_library(hdr,b);
-    if(char2int.find(lb)==char2int.end())
-      char2int[strdup(lb)] = char2int.size();
-    int libid = char2int.find(lb)->second;
+    if(lb){
+      if(char2int.find(lb)==char2int.end())
+	char2int[strdup(lb)] = char2int.size();
+      libid = char2int.find(lb)->second;
+    }
     int strand = bam_is_rev(b);
     
     //[lib,lane,strand,tile]
