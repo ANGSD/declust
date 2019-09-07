@@ -151,6 +151,7 @@ typedef struct{
   bam1_t *d;
   int xs;
   int ys;
+  int seqlen;
 }reldata;//<-releavant data
 
 
@@ -174,73 +175,62 @@ void print_clusters(std::vector<std::vector<int> > &clusters){
   }
 }
 
-void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *fp3){
-  totaldups += q->l;
-  //fprintf(stderr,"do_magic queue->l:%d queue->m:%d chr:%d pos:%d\n",q->l,q->m,q->d[0]->core.tid,q->d[0]->core.pos);
-  std::map<int,std::vector<reldata> > mymap;//<-this contains the library::lane::tile info as key. value is vector of reads,xpos,ypos
-  bam1_t *b = NULL;
-
-  assert(sam_write1(fp3, hdr, q->d[lrand48() %q->l])>=0);
+void plugin(std::map<size_t,std::vector<reldata> > &mymap,bam1_t *b,bam_hdr_t *hdr){
+  //  fprintf(stderr,"Spooling duplicates befreo:%lu\n",mymap.size());
+  reldata point;
+  point.d=b;
   
-  //first loop over all reads(these have the same chr/pos, and group these into queues that are pertile,perlib,pereverything)
-  for(int i=0;i<q->l;i++){
-    b = q->d[i];
-    if(0&&!(b->core.flag &BAM_FDUP)){
-      assert(sam_write1(fp, hdr,b)>=0);      
-      continue;
-    }
-    //    fprintf(stderr,"Spooling duplicates\n");
-    reldata point;
-    point.d=b;
-    
-    mystr = strncpy(mystr,bam_get_qname(b),2048);
-    //    fprintf(stderr,"mystr: \'%s\'\n",mystr);
-    strtok(mystr,"\n\t:");//machine
-    strtok(NULL,"\n\t:");//runname
-    strtok(NULL,"\n\t:");//flowcell
-    int lane = atoi(strtok(NULL,"\n\t:"));
-    int tile = atoi(strtok(NULL,"\n\t:"));
-    point.xs = atoi(strtok(NULL,"\n\t:"));
-    point.ys = atoi(strtok(NULL,"\n\t:"));
-    int libid = 0;
-    char *lb = bam_get_library(hdr,b);
-    if(lb){
-      if(char2int.find(lb)==char2int.end())
-	char2int[strdup(lb)] = char2int.size();
-      libid = char2int.find(lb)->second;
-    }
-    int strand = bam_is_rev(b);
-    
-    //[lib,lane,strand,tile]
-    //tile 4digits
-    //strand 1 digit
-    //lane 1digit
-    //lib*1000000+strand*100000+lane*10000+tile
-    int key=libid*1000000+strand*10000+lane*10000+tile;
-    key = key*1000+b->core.l_qseq;//<- maybe not do this if we dont care of length of reads
-    std::map<int,std::vector<reldata> >::iterator it =mymap.find(key);
-    if(it==mymap.end()){
-      std::vector<reldata> rd;
-      rd.push_back(point);
-      mymap[key]=rd;
-    }else{
-      it->second.push_back(point);
-    }
-      
-  }
+  mystr = strncpy(mystr,bam_get_qname(b),2048);
+  //    fprintf(stderr,"mystr: \'%s\'\n",mystr);
+  strtok(mystr,"\n\t:");//machine
+  strtok(NULL,"\n\t:");//runname
+  strtok(NULL,"\n\t:");//flowcell
+  int lane = atoi(strtok(NULL,"\n\t:"));
+  int tile = atoi(strtok(NULL,"\n\t:"));
+  point.xs = atoi(strtok(NULL,"\n\t:"));
+  point.ys = atoi(strtok(NULL,"\n\t:"));
+  point.seqlen = b->core.l_qseq;
+  
+  int libid = 0;
+  char *lb = bam_get_library(hdr,b);
+  if(lb){
+    if(char2int.find(lb)==char2int.end())
+      char2int[strdup(lb)] = char2int.size();
+    libid = char2int.find(lb)->second;
+    if(char2int.size()>998){
+      fprintf(stderr,"number of libraries is almost above 998, program will exit. Program should be updated\n");
+      exit(0);
 
-#if 0
-  fprintf(stderr,"std::map.size:%lu\n",mymap.size());
-  for(std::map<int,std::vector<reldata> >::iterator it=mymap.begin();it!=mymap.end();it++){
-    fprintf(stderr,"key:%d\n",it->first);
-    std::vector<reldata> &rd=it->second;
-    for(int i=0;i<rd.size();i++)
-      fprintf(stderr,"\tval: xs:%d ys:%d\n",rd[i].xs,rd[i].ys);
+    }
   }
-#endif
+  // fprintf(stderr,"tile:%d, libid:%d lane:%d rlen:%d xs:%d ys:%d\n",tile,libid,lane,b->core.l_qseq,point.xs,point.ys);
+  //[rlen,lib,lane,strand,tile]
+  //tile 4digits
+  //lane 1digit
+  //lib assumed 3 digits
+  //1111+2e4+333e5+444*1e8
+
+
+  size_t key=tile;
+  key += lane*1e4;
+  key += libid*1e5;
+  key += b->core.l_qseq*1e8;
+
+  std::map<size_t,std::vector<reldata> >::iterator it =mymap.find(key);
+  if(it==mymap.end()){
+    std::vector<reldata> rd;
+    rd.push_back(point);
+    mymap[key]=rd;
+  }else{
+    it->second.push_back(point);
+  }
+  //  fprintf(stderr,"Spooling duplicates after:%lu\n",mymap.size());
+}
+
+void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *fp3){
 
   //looping over different libraries, lanes, etc
-  for(std::map<int,std::vector<reldata> >::iterator it=mymap.begin();it!=mymap.end();it++) {
+  for(std::map<size_t,std::vector<reldata> >::iterator it=mymap.begin();it!=mymap.end();it++) {
     //    fprintf(stderr,"key:%d\n",it->first);
     std::vector<reldata> &rd=it->second;
     //only one read in lane,lib,strand,tile
@@ -387,6 +377,56 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *fp3){
       }
     }    
   }
+}
+
+void printmap(FILE *fp,std::map<size_t,std::vector<reldata> > &mymap){
+#if 1
+  fprintf(fp,"std::map.size:%lu\n",mymap.size());
+  for(std::map<size_t,std::vector<reldata> >::iterator it=mymap.begin();it!=mymap.end();it++){
+    fprintf(fp,"key:%lu\n",it->first);
+    std::vector<reldata> &rd=it->second;
+    for(int i=0;i<rd.size();i++)
+      fprintf(fp,"\tval: xs:%d ys:%d\n",rd[i].xs,rd[i].ys);
+  }
+#endif
+}
+
+void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *fp3){
+  //fprintf(stderr,"do_magic queue->l:%d queue->m:%d chr:%d pos:%d\n",q->l,q->m,q->d[0]->core.tid,q->d[0]->core.pos);
+  totaldups += q->l;
+
+  //the library::lane::tile info as key. value is vector of reads,xpos,ypos
+  std::map<size_t,std::vector<reldata> > mymapF;
+  std::map<size_t,std::vector<reldata> > mymapR;
+  bam1_t *b = NULL;
+
+  //first loop over all reads(these have the same chr/pos, and group these into queues that are pertile,perlib,pereverything)
+  for(int i=0;i<q->l;i++) {
+    //    fprintf(stderr,"i:%d/%d\n",i,q->l);
+    b = q->d[i];
+    if(0&&!(b->core.flag &BAM_FDUP)){
+      assert(sam_write1(fp, hdr,b)>=0);      
+      continue;
+    }
+    if(bam_is_rev(b))
+      plugin(mymapR,b,hdr);
+    else
+      plugin(mymapF,b,hdr);
+  }
+
+  plugout(mymapF,hdr,fp,fp2,fp3);
+  plugout(mymapR,hdr,fp,fp2,fp3);
+  //assert(sam_write1(fp3, hdr, q->d[lrand48() %q->l])>=0); //<- this one prints a random read as the represent of the dups
+  if(mymapF.size()>0){
+    std::vector<reldata> &re = mymapF.rbegin()->second;
+    assert(sam_write1(fp3, hdr,re[0].d));
+  }
+
+   if(mymapR.size()>0){
+    std::vector<reldata> &re = mymapR.rbegin()->second;
+    assert(sam_write1(fp3, hdr,re[0].d));
+  }
+  
 }
 
 
