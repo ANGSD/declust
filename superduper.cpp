@@ -518,6 +518,7 @@ int usage(FILE *fp, int is_long_help)
 "  -p INT   pixeldistance default 5000 \n"
 "  -T FILE  reference in the fastaformat (required from reading and writing crams)\n"
 "  -@ INT   Number of threads to use\n"
+"  -q INT   Mapping quality filter\n"
 // read filters
 	    );
     fprintf(fp,
@@ -563,6 +564,8 @@ int main(int argc, char **argv){
   int c;
   int nthreads = 1;
   htsThreadPool p = {NULL, 0};
+  int mapq =-1;
+
   if(argc==1){
     usage(stdout,0);
     return 0;
@@ -579,7 +582,7 @@ int main(int argc, char **argv){
   };
   
   while ((c = getopt_long(argc, argv,
-			  "bCo:T:p:@:",
+			  "bCo:T:p:@:q:",
 			  lopts, NULL)) >= 0) {
     switch (c) {
         case 'b': out_mode[1] = 'b'; break;
@@ -588,6 +591,7 @@ int main(int argc, char **argv){
         case 'o': fn_out = strdup(optarg); break;
         case 'p': pxdist = atof(optarg); break;
         case '@': nthreads = atoi(optarg); break;
+        case 'q': mapq = atoi(optarg); break;
         case '?':
 	  if (optopt == '?') {  // '-?' appeared on command line
 	    return usage(stdout,0);
@@ -713,6 +717,8 @@ int main(int argc, char **argv){
   
   while(((ret=sam_read1(in,hdr,b)))>0){
     nproc++;
+    if(b->core.qual!=-1 && b->core.qual<mapq)
+      continue;
     //catch case where there is one read in queue, and the next read is a new position
     //then we simply write it to the output
     if(queue->l==1 && queue->d[0]->core.pos!=b->core.pos){
@@ -746,7 +752,7 @@ int main(int argc, char **argv){
     bam_destroy1(queue->d[i]);
   free(queue->d);
   free(queue);
-  bam_hdr_destroy(hdr);
+  //  bam_hdr_destroy(hdr);
   for(aMap::iterator it=char2int.begin();it!=char2int.end();it++)
     free(it->first);
 
