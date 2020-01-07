@@ -519,6 +519,7 @@ int usage(FILE *fp, int is_long_help)
 "  -T FILE  reference in the fastaformat (required from reading and writing crams)\n"
 "  -@ INT   Number of threads to use\n"
 "  -q INT   Mapping quality filter\n"
+"  -m       Discard unmapped reads (default off)\n"
 // read filters
 	    );
     fprintf(fp,
@@ -565,6 +566,7 @@ int main(int argc, char **argv){
   int nthreads = 1;
   htsThreadPool p = {NULL, 0};
   int mapq =-1;
+  int mapped_only = 0;
 
   if(argc==1){
     usage(stdout,0);
@@ -582,7 +584,7 @@ int main(int argc, char **argv){
   };
   
   while ((c = getopt_long(argc, argv,
-			  "bCo:T:p:@:q:",
+			  "bCo:T:p:@:q:m",
 			  lopts, NULL)) >= 0) {
     switch (c) {
         case 'b': out_mode[1] = 'b'; break;
@@ -592,6 +594,7 @@ int main(int argc, char **argv){
         case 'p': pxdist = atof(optarg); break;
         case '@': nthreads = atoi(optarg); break;
         case 'q': mapq = atoi(optarg); break;
+        case 'm': mapped_only = 1; break;
         case '?':
 	  if (optopt == '?') {  // '-?' appeared on command line
 	    return usage(stdout,0);
@@ -629,7 +632,7 @@ int main(int argc, char **argv){
     return 0;
   }
   
-  fprintf(stderr,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d\n",refName,fname,out_mode,pxdist,nthreads);
+  fprintf(stderr,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq);
   
   if(refName){
     char *ref =(char*) malloc(10 + strlen(refName) + 1);
@@ -717,7 +720,11 @@ int main(int argc, char **argv){
   
   while(((ret=sam_read1(in,hdr,b)))>0){
     nproc++;
-    if(b->core.qual!=-1 && b->core.qual<mapq)
+    if(mapped_only!=0){
+      if(b->core.flag&4)
+	continue;
+    }
+    if(mapq!=-1 && b->core.qual<mapq)
       continue;
     //catch case where there is one read in queue, and the next read is a new position
     //then we simply write it to the output
