@@ -16,7 +16,7 @@
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #endif
 
-double pxdist=5000;
+double pxdist=12000;
 
 typedef struct{
   bam1_t **d;//data
@@ -28,10 +28,13 @@ size_t totaldups=0;
 size_t pcrdups=0;
 size_t clustdups=0;
 size_t nproc=0;
+size_t purecount,noclusterdupcount;
 
 int nreads_per_pos=4;//assuming this is the number reads per pos. If larger the program will reallocate
 
 char out_mode[5]="wb";
+
+double CMA =0; //cumulative moving average
 
 queue_t *init_queue_t(int l){
   //  fprintf(stderr,"initializing queue with: %d elements\n",l);
@@ -236,6 +239,7 @@ void plugin(std::map<size_t,std::vector<reldata> > &mymap,bam1_t *b,bam_hdr_t *h
  */
 
 
+//fp=noclusterdup,fp2=onlyclusterdup
 void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFile *fp,samFile *fp2){
 
   //looping over different libraries, lanes, etc
@@ -246,6 +250,7 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
     //only one read in lane,lib,strand,tile
     if(rd.size()==1){
       pcrdups++;
+      noclusterdupcount++;
       assert(sam_write1(fp, hdr,rd[0].d)>=0);
       continue;
     }
@@ -264,12 +269,14 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
 	assert(sam_write1(fp, hdr,rd[0].d)>=0);      
 	assert(sam_write1(fp, hdr,rd[1].d)>=0);
 	pcrdups +=2 ;
+	noclusterdupcount+=2;
       }else{//same cluster
 	assert(sam_write1(fp2, hdr,rd[0].d)>=0);
 	assert(sam_write1(fp2, hdr,rd[1].d)>=0);
 	assert(sam_write1(fp, hdr,rd[0].d)>=0);
 	pcrdups +=1;
 	clustdups++ ;
+	noclusterdupcount++;
       }
       continue;
     }
@@ -290,12 +297,14 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
 	assert(sam_write1(fp, hdr,rd[1].d)>=0);
 	assert(sam_write1(fp, hdr,rd[2].d)>=0);
 	pcrdups +=3 ;
+	noclusterdupcount+=3;
       }else if (val>=2){//same cluster
 	assert(sam_write1(fp2, hdr,rd[0].d)>=0);
 	assert(sam_write1(fp2, hdr,rd[1].d)>=0);
 	assert(sam_write1(fp2, hdr,rd[2].d)>=0);
 	assert(sam_write1(fp, hdr,rd[0].d)>=0);
 	pcrdups +=1;
+	noclusterdupcount++;
 	clustdups++ ;
       }else if (val==1){//2 in cluster one outside
 	if(d01<pxdist){//rd0 and rd1 defines a cluster, rd2 outside
@@ -304,6 +313,7 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
 	  assert(sam_write1(fp, hdr,rd[0].d)>=0);
 	  assert(sam_write1(fp, hdr,rd[2].d)>=0);
 	  pcrdups +=2;
+	  noclusterdupcount +=2 ;
 	  clustdups++ ;
 	}
 	else if(d02<pxdist){//rd0 and rd2 defines a cluster, rd1 outside
@@ -312,6 +322,7 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
 	  assert(sam_write1(fp, hdr,rd[0].d)>=0);
 	  assert(sam_write1(fp, hdr,rd[1].d)>=0);
 	  pcrdups +=2;
+	  noclusterdupcount +=2 ;
 	  clustdups++ ;
 	}
 	else if(d12<pxdist){//rd1 and rd2 defines a cluster, rd0 outside
@@ -320,6 +331,7 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
 	  assert(sam_write1(fp, hdr,rd[1].d)>=0);
 	  assert(sam_write1(fp, hdr,rd[0].d)>=0);
 	  pcrdups +=2;
+	  noclusterdupcount +=2 ;
 	  clustdups++ ;
 	}else{
 	  fprintf(stderr,"never happens\n");
@@ -436,6 +448,7 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
       //      fprintf(stderr,"tmp.size():%lu\n",tmp.size());
       if(tmp.size()>0){
 	pcrdups++;
+	noclusterdupcount++;
 	assert(sam_write1(fp, hdr,rd[tmp[0]].d)>=0);
       }if(tmp.size()<3)//case==1 and case==2 has been treated seperately
 	continue;
@@ -460,7 +473,7 @@ void printmap(FILE *fp,std::map<size_t,std::vector<reldata> > &mymap){
 #endif
 }
 
-void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *fp3){
+void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupFP){
   //fprintf(stderr,"do_magic queue->l:%d queue->m:%d chr:%d pos:%d\n",q->l,q->m,q->d[0]->core.tid,q->d[0]->core.pos);
 
   //  fprintf(stderr,"info\t%d\t%d\n",q->d[0]->core.pos+1,q->l);
@@ -476,7 +489,8 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *fp3){
     //    fprintf(stderr,"i:%d/%d\n",i,q->l);
     b = q->d[i];
     if(0&&!(b->core.flag &BAM_FDUP)){//never do this,
-      assert(sam_write1(fp, hdr,b)>=0);      
+      assert(sam_write1(fp, hdr,b)>=0);
+      noclusterdupcount++;
       continue;
     }
     if(bam_is_rev(b))
@@ -492,13 +506,18 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *fp3){
   //assert(sam_write1(fp3, hdr, q->d[lrand48() %q->l])>=0); //<- this one prints a random read as the represent of the dups
   if(mymapF.size()>0){
     std::vector<reldata> &re = mymapF.rbegin()->second;
-    assert(sam_write1(fp3, hdr,re[0].d));
-    
+    assert(sam_write1(nodupFP, hdr,re[0].d));
+    purecount++;
+    //    fprintf(stderr,"%f len:%d purecount:%d\n",CMA,re[0].d->core.l_qseq,purecount);
+    CMA = (re[0].d->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
+    //fprintf(stderr,"%f len:%d purecount:%d\n",CMA,re[0].d->core.l_qseq,purecount);
   }
 
    if(mymapR.size()>0){
     std::vector<reldata> &re = mymapR.rbegin()->second;
-    assert(sam_write1(fp3, hdr,re[0].d));
+    assert(sam_write1(nodupFP, hdr,re[0].d));
+    purecount++;
+    CMA = (re[0].d->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
   }
   
 }
@@ -632,8 +651,6 @@ int main(int argc, char **argv){
     return 0;
   }
   
-  fprintf(stderr,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq);
-  
   if(refName){
     char *ref =(char*) malloc(10 + strlen(refName) + 1);
     sprintf(ref, "reference=%s", refName);
@@ -678,8 +695,8 @@ int main(int argc, char **argv){
     return 1;
   }
 
-  fprintf(fp,"#./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d\n",refName,fname,out_mode,pxdist,nthreads);
-
+  fprintf(stderr,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq);
+  fprintf(fp,"#./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq);
   if ((out = sam_open_format(onam1, out_mode, dingding2)) == 0) {
     fprintf(stderr,"Error opening file for writing\n");
     return 1;
@@ -713,7 +730,8 @@ int main(int argc, char **argv){
   assert(sam_hdr_write(out, hdr) == 0);
   assert(sam_hdr_write(out2, hdr) == 0);
   assert(sam_hdr_write(nodupFP, hdr) == 0);
-  
+
+  purecount=noclusterdupcount=0;
   bam1_t *b = bam_init1();
 
   int ret;
@@ -731,6 +749,9 @@ int main(int argc, char **argv){
     if(queue->l==1 && queue->d[0]->core.pos!=b->core.pos){
       assert(sam_write1(out, hdr, queue->d[0])>=0); //write into the file containing the pcrdups+normal reads
       assert(sam_write1(nodupFP, hdr, queue->d[0])>=0);//<- writeinto the file without any dups
+      purecount++;
+      CMA = (queue->d[0]->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
+      noclusterdupcount++;
       queue->l =0;
     }
     if(queue->l>1 &&(queue->d[0]->core.tid!=b->core.tid ||(queue->d[0]->core.pos!=b->core.pos))){
@@ -742,11 +763,14 @@ int main(int argc, char **argv){
     if(queue->l==queue->m)
       realloc_queue(queue);
 
-    bam_copy1(queue->d[queue->l++],b);
+    assert(bam_copy1(queue->d[queue->l++],b)!=NULL);
   }
   if(queue->l==1){
     assert(sam_write1(out, hdr, queue->d[0])>=0); //write into the file containing the pcrdups+normal reads
     assert(sam_write1(nodupFP, hdr, queue->d[0])>=0);//<- writeinto the file without any dups
+    purecount++;
+    CMA = (queue->d[0]->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
+    noclusterdupcount++;
   }else{
     do_magic(queue,hdr,out,out2,nodupFP);
   }
@@ -775,21 +799,23 @@ int main(int argc, char **argv){
           "    total duplicates: %lu\n"
 	  "    cluster duplicates: %lu\n"
 	  "    nr pcr duplicates: %lu\n"
-	  ,nproc,totaldups,clustdups,pcrdups);
+	  "%lu\t%lu\t%f\n"
+	  ,nproc,totaldups,clustdups,pcrdups,purecount,noclusterdupcount,CMA);
   fprintf(fp,
-	  "    reads processed: %lu\n"
-          "    total duplicates: %lu\n"
-	  "    cluster duplicates: %lu\n"
-	  "    nr pcr duplicates: %lu\n"
-	  ,nproc,totaldups,clustdups,pcrdups);
+	  "#    reads processed: %lu\n"
+          "#    total duplicates: %lu\n"
+	  "#    cluster duplicates: %lu\n"
+	  "#    nr pcr duplicates: %lu\n"
+	  "%lu\t%lu\t%f\n"
+	  ,nproc,totaldups,clustdups,pcrdups,purecount,noclusterdupcount,CMA);
 
   fprintf(stderr,
 	  "\t[ALL done] cpu-time used =  %.2f sec\n"
 	  "\t[ALL done] walltime used =  %.2f sec\n"
 	  ,(float)(clock() - t) / CLOCKS_PER_SEC, (float)(time(NULL) - t2));  
   fprintf(fp,
-	  "\t#[ALL done] cpu-time used =  %.2f sec\n"
-	  "\t#[ALL done] walltime used =  %.2f sec\n"
+	  "#[ALL done] cpu-time used =  %.2f sec\n"
+	  "#[ALL done] walltime used =  %.2f sec\n"
 	  ,(float)(clock() - t) / CLOCKS_PER_SEC, (float)(time(NULL) - t2));  
   fclose(fp);
   return 0;
