@@ -34,6 +34,7 @@ int nreads_per_pos=4;//assuming this is the number reads per pos. If larger the 
 
 char out_mode[5]="wb";
 
+//below is just the average/mean calculated fancy
 double CMA =0; //cumulative moving average
 
 queue_t *init_queue_t(int l){
@@ -801,13 +802,6 @@ int main(int argc, char **argv){
 	  "    nr pcr duplicates: %lu\n"
 	  "%lu\t%lu\t%f\n"
 	  ,nproc,totaldups,clustdups,pcrdups,purecount,noclusterdupcount,CMA);
-  fprintf(fp,
-	  "#    reads processed: %lu\n"
-          "#    total duplicates: %lu\n"
-	  "#    cluster duplicates: %lu\n"
-	  "#    nr pcr duplicates: %lu\n"
-	  "%lu\t%lu\t%f\n"
-	  ,nproc,totaldups,clustdups,pcrdups,purecount,noclusterdupcount,CMA);
 
   fprintf(stderr,
 	  "\t[ALL done] cpu-time used =  %.2f sec\n"
@@ -816,7 +810,15 @@ int main(int argc, char **argv){
   fprintf(fp,
 	  "#[ALL done] cpu-time used =  %.2f sec\n"
 	  "#[ALL done] walltime used =  %.2f sec\n"
-	  ,(float)(clock() - t) / CLOCKS_PER_SEC, (float)(time(NULL) - t2));  
+	  ,(float)(clock() - t) / CLOCKS_PER_SEC, (float)(time(NULL) - t2));
+    fprintf(fp,
+	  "#    reads processed: %lu\n"
+          "#    total duplicates: %lu\n"
+	  "#    cluster duplicates: %lu\n"
+	  "#    nr pcr duplicates: %lu\n"
+	  "%lu\t%lu\t%f\n"
+	  ,nproc,totaldups,clustdups,pcrdups,purecount,noclusterdupcount,CMA);
+
   fclose(fp);
   return 0;
 }
