@@ -11,10 +11,13 @@
 #include <cmath>
 #include <getopt.h>
 #include <ctime>
+#include <vector>
 
 #ifndef MIN
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #endif
+
+static size_t histogram[4048];
 
 double pxdist=12000;
 
@@ -241,7 +244,7 @@ void plugin(std::map<size_t,std::vector<reldata> > &mymap,bam1_t *b,bam_hdr_t *h
 
 
 //fp=noclusterdup,fp2=onlyclusterdup
-void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFile *fp,samFile *fp2){
+void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFile *fp,samFile *fp2,size_t &counter){
 
   //looping over different libraries, lanes, etc
   for(std::map<size_t,std::vector<reldata> >::iterator it=mymap.begin();it!=mymap.end();it++) {
@@ -251,8 +254,10 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
     //only one read in lane,lib,strand,tile
     if(rd.size()==1){
       pcrdups++;
+      counter++;
       noclusterdupcount++;
-      assert(sam_write1(fp, hdr,rd[0].d)>=0);
+      if(fp)
+	assert(sam_write1(fp, hdr,rd[0].d)>=0);
       continue;
     }
 
@@ -267,14 +272,21 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
       // fprintf(stderr,"dist is:%f\n",dist);
       //      sd=math.sqrt(((coordsm[0]-coordsl[0])**2)+((coordsm[1]-coordsl[1])**2))
       if(dist>pxdist){//not part of same cluster
-	assert(sam_write1(fp, hdr,rd[0].d)>=0);      
-	assert(sam_write1(fp, hdr,rd[1].d)>=0);
+	counter+=2;
+	if(fp){
+	  assert(sam_write1(fp, hdr,rd[0].d)>=0);      
+	  assert(sam_write1(fp, hdr,rd[1].d)>=0);
+	}
 	pcrdups +=2 ;
 	noclusterdupcount+=2;
       }else{//same cluster
-	assert(sam_write1(fp2, hdr,rd[0].d)>=0);
-	assert(sam_write1(fp2, hdr,rd[1].d)>=0);
-	assert(sam_write1(fp, hdr,rd[0].d)>=0);
+	if(fp2){
+	  assert(sam_write1(fp2, hdr,rd[0].d)>=0);
+	  assert(sam_write1(fp2, hdr,rd[1].d)>=0);
+	}
+	counter++;
+	if(fp)
+	  assert(sam_write1(fp, hdr,rd[0].d)>=0);
 	pcrdups +=1;
 	clustdups++ ;
 	noclusterdupcount++;
@@ -294,43 +306,57 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
       // fprintf(stderr,"dist is:%f\n",dist);
       //      sd=math.sqrt(((coordsm[0]-coordsl[0])**2)+((coordsm[1]-coordsl[1])**2))
       if(val==0){//not part of same cluster
-	assert(sam_write1(fp, hdr,rd[0].d)>=0);      
-	assert(sam_write1(fp, hdr,rd[1].d)>=0);
-	assert(sam_write1(fp, hdr,rd[2].d)>=0);
+	counter += 3;
+	if(fp){
+	  assert(sam_write1(fp, hdr,rd[0].d)>=0);      
+	  assert(sam_write1(fp, hdr,rd[1].d)>=0);
+	  assert(sam_write1(fp, hdr,rd[2].d)>=0);
+	}
 	pcrdups +=3 ;
 	noclusterdupcount+=3;
       }else if (val>=2){//same cluster
-	assert(sam_write1(fp2, hdr,rd[0].d)>=0);
-	assert(sam_write1(fp2, hdr,rd[1].d)>=0);
-	assert(sam_write1(fp2, hdr,rd[2].d)>=0);
-	assert(sam_write1(fp, hdr,rd[0].d)>=0);
+	if(fp2){
+	  assert(sam_write1(fp2, hdr,rd[0].d)>=0);
+	  assert(sam_write1(fp2, hdr,rd[1].d)>=0);
+	  assert(sam_write1(fp2, hdr,rd[2].d)>=0);
+	}
+	counter++;
+	if(fp)
+	  assert(sam_write1(fp, hdr,rd[0].d)>=0);
 	pcrdups +=1;
 	noclusterdupcount++;
 	clustdups++ ;
       }else if (val==1){//2 in cluster one outside
+	counter +=2;
 	if(d01<pxdist){//rd0 and rd1 defines a cluster, rd2 outside
-	  assert(sam_write1(fp2, hdr,rd[0].d)>=0);
-	  assert(sam_write1(fp2, hdr,rd[1].d)>=0);
-	  assert(sam_write1(fp, hdr,rd[0].d)>=0);
-	  assert(sam_write1(fp, hdr,rd[2].d)>=0);
+	  if(fp2 && fp){
+	    assert(sam_write1(fp2, hdr,rd[0].d)>=0);
+	    assert(sam_write1(fp2, hdr,rd[1].d)>=0);
+	    assert(sam_write1(fp, hdr,rd[0].d)>=0);
+	    assert(sam_write1(fp, hdr,rd[2].d)>=0);
+	  }
 	  pcrdups +=2;
 	  noclusterdupcount +=2 ;
 	  clustdups++ ;
 	}
 	else if(d02<pxdist){//rd0 and rd2 defines a cluster, rd1 outside
-	  assert(sam_write1(fp2, hdr,rd[0].d)>=0);
-	  assert(sam_write1(fp2, hdr,rd[2].d)>=0);
-	  assert(sam_write1(fp, hdr,rd[0].d)>=0);
-	  assert(sam_write1(fp, hdr,rd[1].d)>=0);
+	  if(fp2&&fp){
+	    assert(sam_write1(fp2, hdr,rd[0].d)>=0);
+	    assert(sam_write1(fp2, hdr,rd[2].d)>=0);
+	    assert(sam_write1(fp, hdr,rd[0].d)>=0);
+	    assert(sam_write1(fp, hdr,rd[1].d)>=0);
+	  }
 	  pcrdups +=2;
 	  noclusterdupcount +=2 ;
 	  clustdups++ ;
 	}
 	else if(d12<pxdist){//rd1 and rd2 defines a cluster, rd0 outside
-	  assert(sam_write1(fp2, hdr,rd[1].d)>=0);
-	  assert(sam_write1(fp2, hdr,rd[2].d)>=0);
-	  assert(sam_write1(fp, hdr,rd[1].d)>=0);
-	  assert(sam_write1(fp, hdr,rd[0].d)>=0);
+	  if(fp2&&fp){
+	    assert(sam_write1(fp2, hdr,rd[1].d)>=0);
+	    assert(sam_write1(fp2, hdr,rd[2].d)>=0);
+	    assert(sam_write1(fp, hdr,rd[1].d)>=0);
+	    assert(sam_write1(fp, hdr,rd[0].d)>=0);
+	  }
 	  pcrdups +=2;
 	  noclusterdupcount +=2 ;
 	  clustdups++ ;
@@ -365,9 +391,11 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
       
       //      fprintf(stderr,"center is: %f %f pos:%d dist:%f\n",cx,cy,rd[0].d->core.pos+1,dist);
       if(dist>(pxdist/2.0)){
-	assert(sam_write1(fp, hdr,rd[i].d)>=0);      
+	if(fp)
+	  assert(sam_write1(fp, hdr,rd[i].d)>=0);      
       }else
-	assert(sam_write1(fp2, hdr,rd[i].d)>=0);      
+	if(fp2)
+	  assert(sam_write1(fp2, hdr,rd[i].d)>=0);      
       
     }
 #endif
@@ -450,12 +478,15 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
       if(tmp.size()>0){
 	pcrdups++;
 	noclusterdupcount++;
-	assert(sam_write1(fp, hdr,rd[tmp[0]].d)>=0);
+	counter++;
+	if(fp)
+	  assert(sam_write1(fp, hdr,rd[tmp[0]].d)>=0);
       }if(tmp.size()<3)//case==1 and case==2 has been treated seperately
 	continue;
       for(int j=0;j<tmp.size();j++){
 	clustdups++;
-	assert(sam_write1(fp2, hdr,rd[tmp[j]].d)>=0);
+	if(fp2)
+	  assert(sam_write1(fp2, hdr,rd[tmp[j]].d)>=0);
       }
     }
   }
@@ -490,7 +521,8 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
     //    fprintf(stderr,"i:%d/%d\n",i,q->l);
     b = q->d[i];
     if(0&&!(b->core.flag &BAM_FDUP)){//never do this,
-      assert(sam_write1(fp, hdr,b)>=0);
+      if(fp)
+	assert(sam_write1(fp, hdr,b)>=0);
       noclusterdupcount++;
       continue;
     }
@@ -499,15 +531,16 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
     else
       plugin(mymapF,b,hdr);
   }
-
-  plugout(mymapF,hdr,fp,fp2);
-  plugout(mymapR,hdr,fp,fp2);
-
+  size_t counter = 0;
+  plugout(mymapF,hdr,fp,fp2,counter);
+  plugout(mymapR,hdr,fp,fp2,counter);
+  histogram[counter]++;
   
   //assert(sam_write1(fp3, hdr, q->d[lrand48() %q->l])>=0); //<- this one prints a random read as the represent of the dups
   if(mymapF.size()>0){
     std::vector<reldata> &re = mymapF.rbegin()->second;
-    assert(sam_write1(nodupFP, hdr,re[0].d));
+    if(nodupFP)
+      assert(sam_write1(nodupFP, hdr,re[0].d));
     purecount++;
     //    fprintf(stderr,"%f len:%d purecount:%d\n",CMA,re[0].d->core.l_qseq,purecount);
     CMA = (re[0].d->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
@@ -516,7 +549,8 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
 
    if(mymapR.size()>0){
     std::vector<reldata> &re = mymapR.rbegin()->second;
-    assert(sam_write1(nodupFP, hdr,re[0].d));
+    if(nodupFP)
+      assert(sam_write1(nodupFP, hdr,re[0].d));
     purecount++;
     CMA = (re[0].d->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
   }
@@ -540,6 +574,18 @@ int usage(FILE *fp, int is_long_help)
 "  -@ INT   Number of threads to use\n"
 "  -q INT   Mapping quality filter\n"
 "  -m       Discard unmapped reads (default off)\n"
+"  -w       Only calculate statistics (default off)\n"
+"  -v       Verbose mode\n"
+"  -a       Only use the SE part of the bam (default 1)\n"
+"Options for performing extraplation (mirrored from preseq)\n"
+"  -e       maximum extrapolation (default: 1e+10)\n"
+"  -s       step size in extrapolations (default: 1e+06)\n"
+"  -n       number of bootstraps (default: 100)\n"
+"  -c       level for confidence intervals (default: 0.95)\n"
+"  -x       maximum number of terms\n"
+"  -D       defects mode to extrapolate without testing for defects\n"
+"  -r       seed for random number generator\n"
+"\nThe Preseqpaper:\n   Daley, T., Smith, A. Predicting the molecular complexity of sequencing libraries.\n   Nat Methods 10, 325–327 (2013). https://doi.org/10.1038/nmeth.2375\n"
 // read filters
 	    );
     fprintf(fp,
@@ -571,6 +617,17 @@ int usage(FILE *fp, int is_long_help)
 
 
 int main(int argc, char **argv){
+  
+  double max_extrapolation = 1.0e10;
+  double step_size = 1e6;
+  size_t bootstraps = 100;
+  double c_level = 0.95;
+  size_t orig_max_terms = 100;
+  int DEFECTS = 0;
+  int VERBOSE = 0;
+  unsigned long int seed = 0;
+
+
   clock_t t=clock();
   time_t t2=time(NULL);
 
@@ -580,6 +637,8 @@ int main(int argc, char **argv){
   samFile *out2=NULL;
   samFile *nodupFP=NULL;
   FILE *fp = NULL;
+  FILE *fphist = NULL;
+  FILE *fptable = NULL;
   fname=refName=NULL;
   char *fn_out = NULL;
   int c;
@@ -587,12 +646,14 @@ int main(int argc, char **argv){
   htsThreadPool p = {NULL, 0};
   int mapq =-1;
   int mapped_only = 0;
+  int se_only = 1;
+  int stats_only = 0;
 
   if(argc==1){
     usage(stdout,0);
     return 0;
   }
-  
+  //fix these
   static struct option lopts[] = {
     {"add", 1, 0, 0},
     {"append", 0, 0, 0},
@@ -604,17 +665,26 @@ int main(int argc, char **argv){
   };
   
   while ((c = getopt_long(argc, argv,
-			  "bCo:T:p:@:q:m",
+			  "bCo:T:p:@:q:mwe:s:n:c:x:D:r:a:",
 			  lopts, NULL)) >= 0) {
     switch (c) {
-        case 'b': out_mode[1] = 'b'; break;
-        case 'C': out_mode[1] = 'c'; break;
-        case 'T': refName = strdup(optarg); break;
-        case 'o': fn_out = strdup(optarg); break;
-        case 'p': pxdist = atof(optarg); break;
-        case '@': nthreads = atoi(optarg); break;
-        case 'q': mapq = atoi(optarg); break;
-        case 'm': mapped_only = 1; break;
+    case 'b': out_mode[1] = 'b'; break;
+    case 'C': out_mode[1] = 'c'; break;
+    case 'T': refName = strdup(optarg); break;
+    case 'o': fn_out = strdup(optarg); break;
+    case 'p': pxdist = atof(optarg); break;
+    case '@': nthreads = atoi(optarg); break;
+    case 'a': se_only = atoi(optarg); break;
+    case 'q': mapq = atoi(optarg); break;
+    case 'm': mapped_only = 1; break;
+    case 'w': stats_only = 1; break;
+    case 'e': max_extrapolation = atof(optarg); break;
+    case 's': step_size = atof(optarg); break;
+    case 'n': bootstraps = atoi(optarg); break;
+    case 'c': c_level = atof(optarg); break;
+    case 'x': orig_max_terms = atoi(optarg); break;
+    case 'D': DEFECTS = atoi(optarg); break;
+    case 'v': VERBOSE = atoi(optarg); break;
         case '?':
 	  if (optopt == '?') {  // '-?' appeared on command line
 	    return usage(stdout,0);
@@ -677,6 +747,8 @@ int main(int argc, char **argv){
   char onam2[2048]="";
   char onam3[2048]="";
   char onam4[2048]="";
+  char onamhist[2048]="";
+  char onamtable[2048]="";
   strcat(onam1,fn_out);
   strcat(onam2,fn_out);
   strcat(onam3,fn_out);
@@ -695,43 +767,53 @@ int main(int argc, char **argv){
     fprintf(stderr,"Error opening file for writing\n");
     return 1;
   }
-
-  fprintf(stderr,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq);
-  fprintf(fp,"#./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq);
-  if ((out = sam_open_format(onam1, out_mode, dingding2)) == 0) {
+  snprintf(onamhist,2048,"%s.hist.txt",fn_out);
+  snprintf(onamtable,2048,"%s.table.txt",fn_out);
+  if ((fphist = fopen(onamhist, "wb")) == NULL) {
     fprintf(stderr,"Error opening file for writing\n");
     return 1;
   }
   
-  if ((out2 = sam_open_format(onam2, out_mode, dingding2)) == 0) {
-    fprintf(stderr,"Error opening file for writing\n");
-    return 1;
-  }
+  fprintf(stderr,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%d c_lev:%f max_term:%d defect:%d verbose:%d seed:%d se_only:%d",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only);
+  fprintf(fp,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%d c_lev:%f max_term:%d defect:%d verbose:%d seed:%d se_only:%d",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only);
 
-  if ((nodupFP = sam_open_format(onam4, out_mode, dingding2)) == 0) {
-    fprintf(stderr,"Error opening file for writing\n");
-    return 1;
-  }
-
-  if(nthreads>1){
-    if (!(p.pool = hts_tpool_init(nthreads))) {
-      fprintf(stderr, "Error creating thread pool\n");
-      return 0;
+  if(stats_only==0){
+    if ((out = sam_open_format(onam1, out_mode, dingding2)) == 0) {
+      fprintf(stderr,"Error opening file for writing\n");
+      return 1;
     }
-    hts_set_opt(in,  HTS_OPT_THREAD_POOL, &p);
-    if (out) hts_set_opt(out, HTS_OPT_THREAD_POOL, &p);
-    if (out2) hts_set_opt(out2, HTS_OPT_THREAD_POOL, &p);
     
+    if ((out2 = sam_open_format(onam2, out_mode, dingding2)) == 0) {
+      fprintf(stderr,"Error opening file for writing\n");
+      return 1;
+    }
+    
+    if ((nodupFP = sam_open_format(onam4, out_mode, dingding2)) == 0) {
+      fprintf(stderr,"Error opening file for writing\n");
+      return 1;
+    }
+    
+    if(nthreads>1){
+      if (!(p.pool = hts_tpool_init(nthreads))) {
+	fprintf(stderr, "Error creating thread pool\n");
+	return 0;
+      }
+      hts_set_opt(in,  HTS_OPT_THREAD_POOL, &p);
+      if (out) hts_set_opt(out, HTS_OPT_THREAD_POOL, &p);
+      if (out2) hts_set_opt(out2, HTS_OPT_THREAD_POOL, &p);
+      
+    }
   }
-
 
   
   queue_t *queue = init_queue_t(nreads_per_pos);  
   bam_hdr_t  *hdr = sam_hdr_read(in);
-  assert(sam_hdr_write(out, hdr) == 0);
-  assert(sam_hdr_write(out2, hdr) == 0);
-  assert(sam_hdr_write(nodupFP, hdr) == 0);
-
+  if(stats_only==0){
+    assert(sam_hdr_write(out, hdr) == 0);
+    assert(sam_hdr_write(out2, hdr) == 0);
+    assert(sam_hdr_write(nodupFP, hdr) == 0);
+  }
+  
   purecount=noclusterdupcount=0;
   bam1_t *b = bam_init1();
 
@@ -743,13 +825,23 @@ int main(int argc, char **argv){
       if(b->core.flag&4)
 	continue;
     }
+    if(se_only==1){
+      if(b->core.flag&1)//if paired continue
+	continue;
+    }
+
+
+		    
     if(mapq!=-1 && b->core.qual<mapq)
       continue;
     //catch case where there is one read in queue, and the next read is a new position
     //then we simply write it to the output
     if(queue->l==1 && queue->d[0]->core.pos!=b->core.pos){
-      assert(sam_write1(out, hdr, queue->d[0])>=0); //write into the file containing the pcrdups+normal reads
-      assert(sam_write1(nodupFP, hdr, queue->d[0])>=0);//<- writeinto the file without any dups
+      histogram[1]++;
+      if(out)
+	assert(sam_write1(out, hdr, queue->d[0])>=0); //write into the file containing the pcrdups+normal reads
+      if(nodupFP)
+	assert(sam_write1(nodupFP, hdr, queue->d[0])>=0);//<- writeinto the file without any dups
       purecount++;
       CMA = (queue->d[0]->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
       noclusterdupcount++;
@@ -767,8 +859,11 @@ int main(int argc, char **argv){
     assert(bam_copy1(queue->d[queue->l++],b)!=NULL);
   }
   if(queue->l==1){
-    assert(sam_write1(out, hdr, queue->d[0])>=0); //write into the file containing the pcrdups+normal reads
-    assert(sam_write1(nodupFP, hdr, queue->d[0])>=0);//<- writeinto the file without any dups
+    histogram[1]++;
+    if(out)
+      assert(sam_write1(out, hdr, queue->d[0])>=0); //write into the file containing the pcrdups+normal reads
+    if(nodupFP)
+      assert(sam_write1(nodupFP, hdr, queue->d[0])>=0);//<- writeinto the file without any dups
     purecount++;
     CMA = (queue->d[0]->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
     noclusterdupcount++;
@@ -776,10 +871,14 @@ int main(int argc, char **argv){
     do_magic(queue,hdr,out,out2,nodupFP);
   }
   queue->l=0;
-  assert(sam_close(out)==0);
-  assert(sam_close(out2)==0);
-  assert(sam_close(nodupFP)==0);
-  assert(sam_close(in)==0);
+  if(out)
+    assert(sam_close(out)==0);
+  if(out2)
+    assert(sam_close(out2)==0);
+  if(nodupFP)
+    assert(sam_close(nodupFP)==0);
+  if(in)
+    assert(sam_close(in)==0);
   for(int i=0;i<queue->m;i++)
     bam_destroy1(queue->d[i]);
   free(queue->d);
@@ -811,14 +910,25 @@ int main(int argc, char **argv){
 	  "#[ALL done] cpu-time used =  %.2f sec\n"
 	  "#[ALL done] walltime used =  %.2f sec\n"
 	  ,(float)(clock() - t) / CLOCKS_PER_SEC, (float)(time(NULL) - t2));
-    fprintf(fp,
+  fprintf(fp,
 	  "#    reads processed: %lu\n"
           "#    total duplicates: %lu\n"
 	  "#    cluster duplicates: %lu\n"
 	  "#    nr pcr duplicates: %lu\n"
 	  "%lu\t%lu\t%f\n"
 	  ,nproc,totaldups,clustdups,pcrdups,purecount,noclusterdupcount,CMA);
-
+  int last=0;
+  for(int i=0;i<2048;i++)
+    if(histogram[i])
+      last=i;
+  std::vector<double> to_preseq;
+  for(int i=0;i<=last;i++){
+    fprintf(fphist,"%d\t%lu\n",i,histogram[i]);
+    to_preseq.push_back(histogram[i]);
+  }
+  fclose(fphist);
+  int lc_extrap(std::vector<double> &counts_hist,char *nam,double max_extrapolation, double step_size, size_t bootstraps, double c_level,size_t orig_max_terms, int DEFECTS,int VERBOSE, unsigned long int seed);
+  lc_extrap(to_preseq,onamtable,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed);
   fclose(fp);
   return 0;
 }
