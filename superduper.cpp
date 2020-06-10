@@ -17,7 +17,19 @@
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #endif
 
-static size_t histogram[4048];
+size_t *histogram = NULL;
+size_t histogram_l = 4096;
+
+void tsktsk(){
+  fprintf(stderr,"\t-> Incrementing histogram of duplicates from:%lu to  %lu\n",histogram_l,2*histogram_l);
+  size_t *tmptmp = new size_t[2*histogram_l];
+  for(int i=0;i<2*histogram_l;i++)
+    tmptmp[i] = 0;
+  for(int i=0;i<histogram_l;i++)
+    tmptmp[i] = histogram[i];
+  histogram_l = 2*histogram_l;
+  histogram=tmptmp;
+}
 
 double pxdist=12000;
 
@@ -59,7 +71,7 @@ void realloc_queue(queue_t *q){
   //  fprintf(stderr,"reallcing from: q:%d to q:%d\n",q->m,2*q->m);
 
   for(int i=0;0&&i<q->l;i++)
-    fprintf(stderr,"inqueu[%d].pos:%d\n",i,q->d[i]->core.pos);
+    fprintf(stderr,"inqueu[%d].pos:%d\n",i,(int)q->d[i]->core.pos);
 
   bam1_t **d2 = (bam1_t **) malloc(2*q->m*sizeof(bam1_t*));
 
@@ -75,7 +87,7 @@ void realloc_queue(queue_t *q){
   q->m=2*q->m;
   
   for(int i=0;0&&i<q->m;i++)
-    fprintf(stderr,"onqueu[%d].pos:%d\n",i,q->d[i]->core.pos);
+    fprintf(stderr,"onqueu[%d].pos:%d\n",i,(int)q->d[i]->core.pos);
   
 }
 
@@ -169,7 +181,7 @@ double euc_dist(reldata &a,reldata &b){
   double dy=a.ys-b.ys;
   double dist = sqrt(dx*dx+dy*dy);
   
-
+  return dist;
 }
 
 void print_clusters(std::vector<std::vector<int> > &clusters){
@@ -262,8 +274,8 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
     }
 
     
-    for(int i=0;0&i<rd.size();i++)
-      fprintf(stderr,"\tcc key: %d/%d val: xs:%d ys:%d pos:%d\n",it->first,rd.size(),rd[i].xs,rd[i].ys,rd[i].d->core.pos+1);
+    for(int i=0;0&&i<rd.size();i++)
+      fprintf(stderr,"\tcc key: %lu/%lu val: xs:%d ys:%d pos:%lld\n",it->first,rd.size(),rd[i].xs,rd[i].ys,rd[i].d->core.pos+1);
 
     
     //case where two reads come from same lane,lib tile
@@ -534,6 +546,8 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
   size_t counter = 0;
   plugout(mymapF,hdr,fp,fp2,counter);
   plugout(mymapR,hdr,fp,fp2,counter);
+  if(counter>=histogram_l)
+    tsktsk();
   histogram[counter]++;
   
   //assert(sam_write1(fp3, hdr, q->d[lrand48() %q->l])>=0); //<- this one prints a random read as the represent of the dups
@@ -617,7 +631,9 @@ int usage(FILE *fp, int is_long_help)
 
 
 int main(int argc, char **argv){
-  
+  histogram = new size_t [histogram_l];
+  for(int i=0;i<histogram_l;i++)
+    histogram[i] = 0;
   double max_extrapolation = 1.0e10;
   double step_size = 1e6;
   size_t bootstraps = 100;
@@ -774,8 +790,8 @@ int main(int argc, char **argv){
     return 1;
   }
   
-  fprintf(stderr,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%d c_lev:%f max_term:%d defect:%d verbose:%d seed:%d se_only:%d",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only);
-  fprintf(fp,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%d c_lev:%f max_term:%d defect:%d verbose:%d seed:%d se_only:%d",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only);
+  fprintf(stderr,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only);
+  fprintf(fp,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only);
 
   if(stats_only==0){
     if ((out = sam_open_format(onam1, out_mode, dingding2)) == 0) {
@@ -818,7 +834,7 @@ int main(int argc, char **argv){
   bam1_t *b = bam_init1();
 
   int ret;
-  
+  int refId=-1;
   while(((ret=sam_read1(in,hdr,b)))>0){
     nproc++;
     if(mapped_only!=0){
@@ -836,6 +852,10 @@ int main(int argc, char **argv){
       continue;
     //catch case where there is one read in queue, and the next read is a new position
     //then we simply write it to the output
+    if(refId==-1||refId!=b->core.tid){
+      refId=b->core.tid;
+      fprintf(stderr,"\t-> Now at Chromosome: %s\n",hdr->target_name[refId]);
+    }
     if(queue->l==1 && queue->d[0]->core.pos!=b->core.pos){
       histogram[1]++;
       if(out)
@@ -858,6 +878,7 @@ int main(int argc, char **argv){
 
     assert(bam_copy1(queue->d[queue->l++],b)!=NULL);
   }
+
   if(queue->l==1){
     histogram[1]++;
     if(out)
@@ -881,6 +902,7 @@ int main(int argc, char **argv){
     assert(sam_close(in)==0);
   for(int i=0;i<queue->m;i++)
     bam_destroy1(queue->d[i]);
+
   free(queue->d);
   free(queue);
   //  bam_hdr_destroy(hdr);
@@ -891,7 +913,10 @@ int main(int argc, char **argv){
   bam_destroy1(b);
   hts_opt_free((hts_opt *)dingding2->specific);
   free(dingding2);
-  fprintf(stderr,"    Dumpingfiles:\t\'%s\'\n\t\t\t\'%s\'\n\t\t\t\'%s\'\n\t\t\t\'%s\'\n",onam1,onam2,onam3,onam4);
+  if(stats_only==0)
+    fprintf(stderr,"    Dumpingfiles:\t\'%s\'\n\t\t\t\'%s\'\n\t\t\t\'%s\'\n\t\t\t\'%s\'\n",onam1,onam2,onam3,onam4);
+  else
+    fprintf(stderr,"    Dumpingfiles:\t\'%s\'\n",onam3);
   free(fn_out);
   free(fname);
   fprintf(stderr,
@@ -918,7 +943,7 @@ int main(int argc, char **argv){
 	  "%lu\t%lu\t%f\n"
 	  ,nproc,totaldups,clustdups,pcrdups,purecount,noclusterdupcount,CMA);
   int last=0;
-  for(int i=0;i<2048;i++)
+  for(int i=0;i<histogram_l;i++)
     if(histogram[i])
       last=i;
   std::vector<double> to_preseq;
