@@ -20,12 +20,20 @@
 #include <iostream>
 #include <sys/types.h>
 #include <unistd.h>
+#include <random>
+#ifdef __WITH_GSL__
 #include <gsl/gsl_cdf.h>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_statistics_double.h>
 #include <gsl/gsl_sf_gamma.h>
+#endif
 #include <cassert>
 #include "continued_fraction.hpp"
+
+#ifdef __WITH_GSL__
+gsl_rng *rng = NULL;
+#endif
+
 
 using namespace std;
 
@@ -55,6 +63,37 @@ write_predicted_complexity_curve(const string outfile,
         << yield_upper_ci_lognormal[i] << endl;
 }
 
+//double gsl_stats_median_from_sorted_data(const double sorted_data[], const size_t stride, const size_t n);
+
+double median_from_sorted_data(const double sorted_data[], const size_t stride, const size_t n){
+  //ifdef __WITH_GSL__
+  double vals[2];
+  vals[0] = gsl_stats_median_from_sorted_data(sorted_data,stride,n);
+  if(n %2 ){
+    vals[1] = sorted_data[(n-1)/2];
+  }else{
+    double val = sorted_data[(n-1)/2]+ sorted_data[n/2];
+    vals[1] = val/2.0;
+  }
+  //  fprintf(stderr,"valsm:\t%f\t%f\n",vals[0],vals[1]);
+  return vals[1];
+  //#endif
+}
+
+//double gsl_stats_quantile_from_sorted_data(const double sorted_data[], size_t stride, size_t n, double f)
+
+double quantile_from_sorted_data(const double sorted_data[], size_t stride, size_t n, double f){
+  //#ifdef __WITH_GSL__
+  double vals[2];
+  vals[0]= gsl_stats_quantile_from_sorted_data(sorted_data, stride, n, f);
+  int i = floor((n-1)*f);
+  double delta = (n-1)*f-i;
+  vals[1] = (1-delta)*sorted_data[i]+delta*sorted_data[i+1];
+  //  fprintf(stderr,"valsq:\t%f\t%f\n",vals[0],vals[1]);
+  return vals[1];
+  //#endif
+}
+
 
 static void
 median_and_ci(const vector<double> &estimates,
@@ -68,14 +107,14 @@ median_and_ci(const vector<double> &estimates,
   vector<double> sorted_estimates(estimates);
   sort(sorted_estimates.begin(), sorted_estimates.end());
   median_estimate =
-    gsl_stats_median_from_sorted_data(&sorted_estimates[0], 
+    median_from_sorted_data(&sorted_estimates[0], 
                                       1, n_est);
 
   lower_ci_estimate = 
-    gsl_stats_quantile_from_sorted_data(&sorted_estimates[0],
+    quantile_from_sorted_data(&sorted_estimates[0],
 					1, n_est, alpha/2);
   upper_ci_estimate = 
-    gsl_stats_quantile_from_sorted_data(&sorted_estimates[0],
+    quantile_from_sorted_data(&sorted_estimates[0],
 					1, n_est, 1.0 - alpha/2);
 
 }
@@ -132,25 +171,94 @@ check_yield_estimates(const vector<double> &estimates) {
   return true;
 }
 
+double loggamma(double x){
+  //#ifdef __WITH_GSL__
+  double vals[2];
+  vals[0]= gsl_sf_lngamma(x);
+  vals[1] = lgamma(x);
+  //  fprintf(stderr,"valslog:\t%f\t%f\n",vals[0],vals[1]);
+  //#endif
+  return vals[1];
+}
+
+
 static double
 interpolate_distinct(vector<double> &hist, size_t N,
                       size_t S, const size_t n) {
-  double denom = gsl_sf_lngamma(N + 1) - gsl_sf_lngamma(n + 1) - gsl_sf_lngamma(N - n + 1);
+  double denom = loggamma(N + 1) - loggamma(n + 1) - loggamma(N - n + 1);
   vector<double> numer(hist.size(), 0); 
   for (size_t i = 1; i < hist.size(); i++) {
 	// N - i -n + 1 should be greater than 0
 	if (N < i + n) {
 	  numer[i] = 0;
 	} else {
-	  numer[i] = gsl_sf_lngamma(N - i + 1) - gsl_sf_lngamma(n + 1) - gsl_sf_lngamma(N - i - n + 1);
+	  numer[i] = loggamma(N - i + 1) - loggamma(n + 1) - loggamma(N - i - n + 1);
 	  numer[i] = exp(numer[i] - denom) * hist[i];
 	}
   }
   return S - accumulate(numer.begin(), numer.end(), 0);
 }
 
+double ran_binomial(double p,unsigned int n){
+  std::default_random_engine generator;
+  std::binomial_distribution<int> distribution(n,p);
+  return distribution(generator);
+}
+
+
+//vanilla copy of gsl multinomial gsl-2.6/randist/multinomial.c
 void
-resample_hist(const gsl_rng *rng, const vector<size_t> &vals_hist_distinct_counts,
+tsk_ran_multinomial (const size_t K,
+                     const unsigned int N, const double p[], unsigned int n[])
+{
+  size_t k;
+  double norm = 0.0;
+  double sum_p = 0.0;
+
+  unsigned int sum_n = 0;
+
+  /* p[k] may contain non-negative weights that do not sum to 1.0.
+   * Even a probability distribution will not exactly sum to 1.0
+   * due to rounding errors. 
+   */
+
+  for (k = 0; k < K; k++)
+    {
+      norm += p[k];
+    }
+
+  for (k = 0; k < K; k++)
+    {
+      if (p[k] > 0.0)
+        {
+#ifdef __WITH_GLS__
+          n[k] = gsl_ran_binomial (rng, p[k] / (norm - sum_p), N - sum_n);
+#else
+	  n[k] = ran_binomial(p[k]/(norm-sum_p),N-sum_n);
+#endif
+        }
+      else
+        {
+          n[k] = 0;
+        }
+
+      sum_p += p[k];
+      sum_n += n[k];
+    }
+
+}
+
+//void gsl_ran_multinomial (const gsl_rng * r, const size_t K, const unsigned int N, const double p[], unsigned int n[]);
+
+void ran_multinomial (const size_t K, const unsigned int N, const double p[], unsigned int n[]){
+#ifdef __WITH_GSL__
+  gsl_ran_multinomial(rng,K,N,p,n);
+#endif
+}
+
+
+void
+resample_hist(const vector<size_t> &vals_hist_distinct_counts,
               const vector<double> &distinct_counts_hist,
               vector<double> &out_hist) {
 
@@ -160,7 +268,7 @@ resample_hist(const gsl_rng *rng, const vector<size_t> &vals_hist_distinct_count
     static_cast<unsigned int>(accumulate(distinct_counts_hist.begin(),
                                          distinct_counts_hist.end(), 0.0));
 
-  gsl_ran_multinomial(rng, distinct_counts_hist.size(), distinct,
+  ran_multinomial(distinct_counts_hist.size(), distinct,
                       &distinct_counts_hist.front(),
                       &sample_distinct_counts_hist.front());
 
@@ -185,10 +293,11 @@ extrap_bootstrap(const bool VERBOSE, const bool DEFECTS,
 
   //setup rng
   srand(time(0) + getpid());
+#if __WITH_GSL__
   gsl_rng_env_setup();
-  gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+  rng = gsl_rng_alloc(gsl_rng_default);
   gsl_rng_set(rng, seed);
-
+#endif
   double vals_sum = 0.0;
   for(size_t i = 0; i < orig_hist.size(); i++)
     vals_sum += orig_hist[i]*i;
@@ -212,7 +321,7 @@ extrap_bootstrap(const bool VERBOSE, const bool DEFECTS,
 
     vector<double> yield_vector;
     vector<double> hist;
-    resample_hist(rng, orig_hist_distinct_counts, distinct_orig_hist, hist);
+    resample_hist(orig_hist_distinct_counts, distinct_orig_hist, hist);
 
     double sample_vals_sum = 0.0;
     for(size_t i = 0; i < hist.size(); i++)

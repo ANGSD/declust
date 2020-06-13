@@ -1,5 +1,5 @@
 #modied from htslib makefile
-FLAGS=-O3 
+FLAGS=-O3 -D__WITH_GSL__ -std=c++11
 
 CFLAGS += $(FLAGS)
 CXXFLAGS += $(FLAGS)
@@ -33,7 +33,7 @@ ifdef HTSSRC
 	$(CXX) -MM $(CXXFLAGS)  -I$(HTS_INCDIR) $*.cpp >$*.d
 
 superduper: $(OBJ)
-	$(CXX) $(FLAGS)  -o superduper *.o $(HTS_LIBDIR) -lz -llzma -lbz2 -lpthread -lcurl -lgsl
+	$(CXX) $(FLAGS)  -o superduper *.o $(HTS_LIBDIR) -lz -llzma -lbz2 -lpthread -lcurl -lgsl -std=c++11
 else
 %.o: %.c
 	$(CC) -c  $(CFLAGS)  $*.c
