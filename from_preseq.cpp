@@ -257,8 +257,7 @@ void ran_multinomial (const size_t K, const unsigned int N, const double p[], un
 }
 
 
-void
-resample_hist(const vector<size_t> &vals_hist_distinct_counts,
+void resample_hist(const vector<size_t> &vals_hist_distinct_counts,
               const vector<double> &distinct_counts_hist,
               vector<double> &out_hist) {
 
@@ -302,26 +301,22 @@ extrap_bootstrap(const bool VERBOSE, const bool DEFECTS,
   for(size_t i = 0; i < orig_hist.size(); i++)
     vals_sum += orig_hist[i]*i;
 
-  const double initial_distinct 
-    = accumulate(orig_hist.begin(), orig_hist.end(), 0.0);
+  const double initial_distinct = accumulate(orig_hist.begin(), orig_hist.end(), 0.0);
 
-
-  vector<size_t> orig_hist_distinct_counts;
-  vector<double> distinct_orig_hist;
+  std::vector<size_t> orig_hist_bins;
+  std::vector<double> orig_hist_vals;
   for (size_t i = 0; i < orig_hist.size(); i++){
     if (orig_hist[i] > 0) {
-      orig_hist_distinct_counts.push_back(i);
-      distinct_orig_hist.push_back(orig_hist[i]);
+      orig_hist_bins.push_back(i);
+      orig_hist_vals.push_back(orig_hist[i]);
     }
   }
   
-  for (size_t iter = 0;
-       (iter < max_iter && bootstrap_estimates.size() < bootstraps);
-       ++iter) {
-
+  for (size_t iter = 0; (iter < max_iter && bootstrap_estimates.size() < bootstraps); ++iter) {
+    //    fprintf(stderr,"\t-> iter:%d\n",iter);
     vector<double> yield_vector;
     vector<double> hist;
-    resample_hist(orig_hist_distinct_counts, distinct_orig_hist, hist);
+    resample_hist(orig_hist_bins, orig_hist_vals, hist);
 
     double sample_vals_sum = 0.0;
     for(size_t i = 0; i < hist.size(); i++)
@@ -423,44 +418,39 @@ GoodToulmin2xExtrap(const vector<double> &counts_hist){
 
 
 int lc_extrap(vector<double> &counts_hist,char *nam,double max_extrapolation, double step_size, size_t bootstraps, double c_level,size_t orig_max_terms, int DEFECTS,int VERBOSE, unsigned long int seed) {
-  #if 0
-    for(uint jj=0;jj<counts_hist.size();jj++)
-      fprintf(stderr,"jj:%d :%f\n",jj,counts_hist[jj]);
-    fprintf(stderr,"counts_hist.size(): %lu\n",counts_hist.size());
-    exit(0);
+#if 0
+  for(uint jj=0;jj<counts_hist.size();jj++)
+    fprintf(stderr,"jj:%d :%f\n",jj,counts_hist[jj]);
+  fprintf(stderr,"counts_hist.size(): %lu\n",counts_hist.size());
+  exit(0);
 #endif
   std::string outfile=std::string(nam);
   const size_t MIN_REQUIRED_COUNTS = 4;
   int diagonal = 0;
-
-
   
   // if seed is not set, make it random
   if(seed == 0){
     seed = rand();
   }
+  
+  size_t n_reads = 0;
+  
+  const size_t max_observed_count = counts_hist.size() - 1;
+  const double distinct_reads = accumulate(counts_hist.begin(), counts_hist.end(), 0.0);
 
- 
-    size_t n_reads = 0;
+  // ENSURE THAT THE MAX TERMS ARE ACCEPTABLE
+  size_t counts_before_first_zero = 1;
+  while (counts_before_first_zero < counts_hist.size() &&
+	 counts_hist[counts_before_first_zero] > 0)
+    ++counts_before_first_zero;
+  
+  orig_max_terms = std::min(orig_max_terms, counts_before_first_zero - 1);
+  orig_max_terms = orig_max_terms - (orig_max_terms % 2 == 1);
 
- 
-    const size_t max_observed_count = counts_hist.size() - 1;
-    const double distinct_reads = accumulate(counts_hist.begin(),
-                                             counts_hist.end(), 0.0);
-
-    // ENSURE THAT THE MAX TERMS ARE ACCEPTABLE
-    size_t counts_before_first_zero = 1;
-    while (counts_before_first_zero < counts_hist.size() &&
-           counts_hist[counts_before_first_zero] > 0)
-      ++counts_before_first_zero;
-
-    orig_max_terms = std::min(orig_max_terms, counts_before_first_zero - 1);
-    orig_max_terms = orig_max_terms - (orig_max_terms % 2 == 1);
-
-
-    const size_t distinct_counts =
-      static_cast<size_t>(std::count_if(counts_hist.begin(), counts_hist.end(),
-                                        bind2nd(std::greater<double>(), 0.0)));
+  
+  const size_t distinct_counts =
+    static_cast<size_t>(std::count_if(counts_hist.begin(), counts_hist.end(),
+				      bind2nd(std::greater<double>(), 0.0)));
     if (VERBOSE)
       std::cerr << "TOTAL READS     = " << n_reads << endl
            << "DISTINCT READS  = " << distinct_reads << endl

@@ -868,7 +868,7 @@ int main(int argc, char **argv){
   };
   
   while ((c = getopt_long(argc, argv,
-			  "bCo:T:p:@:q:mwe:s:n:c:x:D:r:a:H:",
+			  "bCo:T:p:@:q:mwe:s:n:c:x:D:r:a:H:v",
 			  lopts, NULL)) >= 0) {
     switch (c) {
     case 'b': out_mode[1] = 'b'; break;
@@ -888,7 +888,7 @@ int main(int argc, char **argv){
     case 'x': orig_max_terms = atoi(optarg); break;
     case 'D': DEFECTS = atoi(optarg); break;
     case 'H': histfile = strdup(optarg); break;
-    case 'v': VERBOSE = atoi(optarg); break;
+    case 'v': VERBOSE = 1; break;
         case '?':
 	  if (optopt == '?') {  // '-?' appeared on command line
 	    return usage(stdout,0);
