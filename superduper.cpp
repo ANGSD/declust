@@ -629,146 +629,21 @@ int usage(FILE *fp, int is_long_help)
     return 0;
 }
 
-
-int main(int argc, char **argv){
-  histogram = new size_t [histogram_l];
-  for(int i=0;i<histogram_l;i++)
-    histogram[i] = 0;
-  double max_extrapolation = 1.0e10;
-  double step_size = 1e6;
-  size_t bootstraps = 100;
-  double c_level = 0.95;
-  size_t orig_max_terms = 100;
-  int DEFECTS = 0;
-  int VERBOSE = 0;
-  unsigned long int seed = 0;
-
-
-  clock_t t=clock();
-  time_t t2=time(NULL);
-
-  char *fname,*refName;
+void parse_sequencingdata(char *fn_out,char *refName,char *fname,int stats_only,int nthreads,int mapped_only,int se_only,int mapq,char *onam3,FILE *fp){
+  htsThreadPool p = {NULL, 0};
   samFile *in=NULL;
   samFile *out=NULL;
   samFile *out2=NULL;
   samFile *nodupFP=NULL;
-  FILE *fp = NULL;
-  FILE *fphist = NULL;
-  FILE *fptable = NULL;
-  fname=refName=NULL;
-  char *fn_out = NULL;
-  int c;
-  int nthreads = 1;
-  htsThreadPool p = {NULL, 0};
-  int mapq =-1;
-  int mapped_only = 0;
-  int se_only = 1;
-  int stats_only = 0;
-
-  if(argc==1){
-    usage(stdout,0);
-    return 0;
-  }
-  //fix these
-  static struct option lopts[] = {
-    {"add", 1, 0, 0},
-    {"append", 0, 0, 0},
-    {"delete", 1, 0, 0},
-    {"verbose", 0, 0, 0},
-    {"create", 1, 0, 'c'},
-    {"file", 1, 0, 0},
-    {NULL, 0, NULL, 0}
-  };
   
-  while ((c = getopt_long(argc, argv,
-			  "bCo:T:p:@:q:mwe:s:n:c:x:D:r:a:",
-			  lopts, NULL)) >= 0) {
-    switch (c) {
-    case 'b': out_mode[1] = 'b'; break;
-    case 'C': out_mode[1] = 'c'; break;
-    case 'T': refName = strdup(optarg); break;
-    case 'o': fn_out = strdup(optarg); break;
-    case 'p': pxdist = atof(optarg); break;
-    case '@': nthreads = atoi(optarg); break;
-    case 'a': se_only = atoi(optarg); break;
-    case 'q': mapq = atoi(optarg); break;
-    case 'm': mapped_only = 1; break;
-    case 'w': stats_only = 1; break;
-    case 'e': max_extrapolation = atof(optarg); break;
-    case 's': step_size = atof(optarg); break;
-    case 'n': bootstraps = atoi(optarg); break;
-    case 'c': c_level = atof(optarg); break;
-    case 'x': orig_max_terms = atoi(optarg); break;
-    case 'D': DEFECTS = atoi(optarg); break;
-    case 'v': VERBOSE = atoi(optarg); break;
-        case '?':
-	  if (optopt == '?') {  // '-?' appeared on command line
-	    return usage(stdout,0);
-	  } else {
-	    if (optopt) { // Bad short option
-	      fprintf(stdout,"./superduper invalid option -- '%c'\n", optopt);
-	    } else { // Bad long option
-	      // Do our best.  There is no good solution to finding
-	      // out what the bad option was.
-	      // See, e.g. https://stackoverflow.com/questions/2723888/where-does-getopt-long-store-an-unrecognized-option
-	      if (optind > 0 && strncmp(argv[optind - 1], "--", 2) == 0) {
-		fprintf(stdout,"./superduper unrecognised option '%s'\n",argv[optind - 1]);
-	      }
-	    }
-	    return 0;//usage(stderr, 0);
-	  }
-    default:
-      fprintf(stderr,"adsadsfasdf\n");
-      fname = strdup(optarg);
-      fprintf(stderr,"assinging: %s to fname:%s\n",optarg,fname);
-      break;
-    }
-  }
-  fname = strdup(argv[optind]);
-
-  if(!fname){
-    fprintf(stderr,"\t-> No input file specified\n");
-    usage(stdout,0);
-    return 0;
-  }
-
-  if(!fn_out){
-    fprintf(stderr,"\t-> No output file specified\n");
-    usage(stdout,0);
-    return 0;
-  }
-  
-  if(refName){
-    char *ref =(char*) malloc(10 + strlen(refName) + 1);
-    sprintf(ref, "reference=%s", refName);
-    hts_opt_add((hts_opt **)&dingding2->specific,ref);
-    free(ref);
-  }
-
-  if(strstr(fname,".cram")!=NULL &&out_mode[1]=='c'&&refName==NULL){
-    fprintf(stderr,"\t-> cram file requires reference with -T FILE.fa \n");
-    return 0;
-  }
-  if(out_mode[1]=='c'&&refName==NULL){
-    fprintf(stderr,"\t-> cram file requires reference with -T FILE.fa \n");
-    return 0;
-  }
-  
-  if((in=sam_open_format(fname,"r",dingding2))==NULL ){
-    fprintf(stderr,"[%s] nonexistant file: %s\n",__FUNCTION__,fname);
-    exit(0);
-  }
-
   char onam1[2048]="";
   char onam2[2048]="";
-  char onam3[2048]="";
   char onam4[2048]="";
-  char onamhist[2048]="";
-  char onamtable[2048]="";
+
   strcat(onam1,fn_out);
   strcat(onam2,fn_out);
-  strcat(onam3,fn_out);
   strcat(onam4,fn_out);
+
   if(out_mode[1]=='b'){
     strcat(onam1,".noClusterDuplicates.bam");
     strcat(onam2,".onlyClusterDuplicates.bam");
@@ -778,49 +653,55 @@ int main(int argc, char **argv){
     strcat(onam2,".onlyClusterDuplicates.cram");
     strcat(onam4,".pure.cram");
   }
-  strcat(onam3,".dupstat.txt");
-  if ((fp = fopen(onam3, "wb")) == NULL) {
-    fprintf(stderr,"Error opening file for writing\n");
-    return 1;
+
+  if(refName){
+    char *ref =(char*) malloc(10 + strlen(refName) + 1);
+    sprintf(ref, "reference=%s", refName);
+    hts_opt_add((hts_opt **)&dingding2->specific,ref);
+    free(ref);
   }
-  snprintf(onamhist,2048,"%s.hist.txt",fn_out);
-  snprintf(onamtable,2048,"%s.table.txt",fn_out);
-  if ((fphist = fopen(onamhist, "wb")) == NULL) {
-    fprintf(stderr,"Error opening file for writing\n");
-    return 1;
+
+  if(strstr(fname,".cram")!=NULL &&out_mode[1]=='c'&&refName==NULL){
+    fprintf(stderr,"\t-> cram file requires reference with -T FILE.fa \n");
+    exit(0);
+  }
+
+  if(out_mode[1]=='c'&&refName==NULL){
+    fprintf(stderr,"\t-> cram file requires reference with -T FILE.fa \n");
+    exit(0);
   }
   
-  fprintf(stderr,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only);
-  fprintf(fp,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only);
+  if((in=sam_open_format(fname,"r",dingding2))==NULL ){
+    fprintf(stderr,"[%s] nonexistant file: %s\n",__FUNCTION__,fname);
+    exit(0);
+  }
 
   if(stats_only==0){
     if ((out = sam_open_format(onam1, out_mode, dingding2)) == 0) {
       fprintf(stderr,"Error opening file for writing\n");
-      return 1;
+      exit(0);
     }
     
     if ((out2 = sam_open_format(onam2, out_mode, dingding2)) == 0) {
       fprintf(stderr,"Error opening file for writing\n");
-      return 1;
+      exit(0);
     }
     
     if ((nodupFP = sam_open_format(onam4, out_mode, dingding2)) == 0) {
       fprintf(stderr,"Error opening file for writing\n");
-      return 1;
+      exit(0);
     }
     
     if(nthreads>1){
       if (!(p.pool = hts_tpool_init(nthreads))) {
 	fprintf(stderr, "Error creating thread pool\n");
-	return 0;
+	exit(0);
       }
       hts_set_opt(in,  HTS_OPT_THREAD_POOL, &p);
       if (out) hts_set_opt(out, HTS_OPT_THREAD_POOL, &p);
       if (out2) hts_set_opt(out2, HTS_OPT_THREAD_POOL, &p);
-      
     }
   }
-
   
   queue_t *queue = init_queue_t(nreads_per_pos);  
   bam_hdr_t  *hdr = sam_hdr_read(in);
@@ -927,14 +808,7 @@ int main(int argc, char **argv){
 	  "%lu\t%lu\t%f\n"
 	  ,nproc,totaldups,clustdups,pcrdups,purecount,noclusterdupcount,CMA);
 
-  fprintf(stderr,
-	  "\t[ALL done] cpu-time used =  %.2f sec\n"
-	  "\t[ALL done] walltime used =  %.2f sec\n"
-	  ,(float)(clock() - t) / CLOCKS_PER_SEC, (float)(time(NULL) - t2));  
-  fprintf(fp,
-	  "#[ALL done] cpu-time used =  %.2f sec\n"
-	  "#[ALL done] walltime used =  %.2f sec\n"
-	  ,(float)(clock() - t) / CLOCKS_PER_SEC, (float)(time(NULL) - t2));
+ 
   fprintf(fp,
 	  "#    reads processed: %lu\n"
           "#    total duplicates: %lu\n"
@@ -942,6 +816,137 @@ int main(int argc, char **argv){
 	  "#    nr pcr duplicates: %lu\n"
 	  "%lu\t%lu\t%f\n"
 	  ,nproc,totaldups,clustdups,pcrdups,purecount,noclusterdupcount,CMA);
+
+}
+
+
+int main(int argc, char **argv){
+  histogram = new size_t [histogram_l];
+  for(int i=0;i<histogram_l;i++)
+    histogram[i] = 0;
+  double max_extrapolation = 1.0e10;
+  double step_size = 1e6;
+  size_t bootstraps = 100;
+  double c_level = 0.95;
+  size_t orig_max_terms = 100;
+  int DEFECTS = 0;
+  int VERBOSE = 0;
+  unsigned long int seed = 0;
+
+
+  clock_t t=clock();
+  time_t t2=time(NULL);
+
+  char *fname,*refName;
+
+  FILE *fp = NULL;
+  FILE *fphist = NULL;
+  FILE *fptable = NULL;
+  fname=refName=NULL;
+  char *fn_out = NULL;
+  int c;
+  int nthreads = 1;
+
+  int mapq =-1;
+  int mapped_only = 0;
+  int se_only = 1;
+  int stats_only = 0;
+
+  if(argc==1){
+    usage(stdout,0);
+    return 0;
+  }
+  //fix these
+  static struct option lopts[] = {
+    {"add", 1, 0, 0},
+    {"append", 0, 0, 0},
+    {"delete", 1, 0, 0},
+    {"verbose", 0, 0, 0},
+    {"create", 1, 0, 'c'},
+    {"file", 1, 0, 0},
+    {NULL, 0, NULL, 0}
+  };
+  
+  while ((c = getopt_long(argc, argv,
+			  "bCo:T:p:@:q:mwe:s:n:c:x:D:r:a:",
+			  lopts, NULL)) >= 0) {
+    switch (c) {
+    case 'b': out_mode[1] = 'b'; break;
+    case 'C': out_mode[1] = 'c'; break;
+    case 'T': refName = strdup(optarg); break;
+    case 'o': fn_out = strdup(optarg); break;
+    case 'p': pxdist = atof(optarg); break;
+    case '@': nthreads = atoi(optarg); break;
+    case 'a': se_only = atoi(optarg); break;
+    case 'q': mapq = atoi(optarg); break;
+    case 'm': mapped_only = 1; break;
+    case 'w': stats_only = 1; break;
+    case 'e': max_extrapolation = atof(optarg); break;
+    case 's': step_size = atof(optarg); break;
+    case 'n': bootstraps = atoi(optarg); break;
+    case 'c': c_level = atof(optarg); break;
+    case 'x': orig_max_terms = atoi(optarg); break;
+    case 'D': DEFECTS = atoi(optarg); break;
+    case 'v': VERBOSE = atoi(optarg); break;
+        case '?':
+	  if (optopt == '?') {  // '-?' appeared on command line
+	    return usage(stdout,0);
+	  } else {
+	    if (optopt) { // Bad short option
+	      fprintf(stdout,"./superduper invalid option -- '%c'\n", optopt);
+	    } else { // Bad long option
+	      // Do our best.  There is no good solution to finding
+	      // out what the bad option was.
+	      // See, e.g. https://stackoverflow.com/questions/2723888/where-does-getopt-long-store-an-unrecognized-option
+	      if (optind > 0 && strncmp(argv[optind - 1], "--", 2) == 0) {
+		fprintf(stdout,"./superduper unrecognised option '%s'\n",argv[optind - 1]);
+	      }
+	    }
+	    return 0;//usage(stderr, 0);
+	  }
+    default:
+      fprintf(stderr,"adsadsfasdf\n");
+      fname = strdup(optarg);
+      fprintf(stderr,"assinging: %s to fname:%s\n",optarg,fname);
+      break;
+    }
+  }
+  fname = strdup(argv[optind]);
+
+  if(!fname){
+    fprintf(stderr,"\t-> No input file specified\n");
+    usage(stdout,0);
+    return 0;
+  }
+
+  if(!fn_out){
+    fprintf(stderr,"\t-> No output file specified\n");
+    usage(stdout,0);
+    return 0;
+  }
+  char onamhist[2048]="";
+  char onamtable[2048]="";
+  char onam3[2048]="";
+  strcat(onam3,fn_out);
+  
+  snprintf(onamhist,2048,"%s.hist.txt",fn_out);
+  snprintf(onamtable,2048,"%s.table.txt",fn_out);
+  if ((fphist = fopen(onamhist, "wb")) == NULL) {
+    fprintf(stderr,"Error opening file for writing\n");
+    return 1;
+  }
+  strcat(onam3,".dupstat.txt");
+  if ((fp = fopen(onam3, "wb")) == NULL) {
+    fprintf(stderr,"Error opening file for writing\n");
+    return 1;
+  }  
+  fprintf(stderr,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only);
+  fprintf(fp,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only);
+
+  if(fname)
+    parse_sequencingdata(fn_out,refName,fname,stats_only,nthreads,mapped_only,se_only,mapq,onam3,fp);
+    
+  
   int last=0;
   for(int i=0;i<histogram_l;i++)
     if(histogram[i])
@@ -955,6 +960,14 @@ int main(int argc, char **argv){
   int lc_extrap(std::vector<double> &counts_hist,char *nam,double max_extrapolation, double step_size, size_t bootstraps, double c_level,size_t orig_max_terms, int DEFECTS,int VERBOSE, unsigned long int seed);
   lc_extrap(to_preseq,onamtable,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed);
   fclose(fp);
+  fprintf(stderr,
+	  "\t[ALL done] cpu-time used =  %.2f sec\n"
+	  "\t[ALL done] walltime used =  %.2f sec\n"
+	  ,(float)(clock() - t) / CLOCKS_PER_SEC, (float)(time(NULL) - t2));  
+  fprintf(fp,
+	  "#[ALL done] cpu-time used =  %.2f sec\n"
+	  "#[ALL done] walltime used =  %.2f sec\n"
+	  ,(float)(clock() - t) / CLOCKS_PER_SEC, (float)(time(NULL) - t2));
   return 0;
 }
 
