@@ -315,31 +315,31 @@ extrap_bootstrap(const bool VERBOSE, const bool DEFECTS,
   for (size_t iter = 0; (iter < max_iter && bootstrap_estimates.size() < bootstraps); ++iter) {
     //    fprintf(stderr,"\t-> iter:%d\n",iter);
     vector<double> yield_vector;
-    vector<double> hist;
-    resample_hist(orig_hist_bins, orig_hist_vals, hist);
+    vector<double> outhist;
+    resample_hist(orig_hist_bins, orig_hist_vals, outhist);
 
     double sample_vals_sum = 0.0;
-    for(size_t i = 0; i < hist.size(); i++)
-      sample_vals_sum += i*hist[i];
+    for(size_t i = 0; i < outhist.size(); i++)
+      sample_vals_sum += i*outhist[i];
 
     //resize boot_hist to remove excess zeros
-    while (hist.back() == 0)
-      hist.pop_back();
+    while (outhist.back() == 0)
+      outhist.pop_back();
 
     // compute complexity curve by random sampling w/out replacement
     const size_t upper_limit = static_cast<size_t>(sample_vals_sum);
-	const size_t distinct = static_cast<size_t>(accumulate(hist.begin(), hist.end(), 0.0));
+	const size_t distinct = static_cast<size_t>(accumulate(outhist.begin(), outhist.end(), 0.0));
     const size_t step = static_cast<size_t>(bin_step_size);
     size_t sample = step;
     while(sample < upper_limit){
-      yield_vector.push_back(interpolate_distinct(hist, upper_limit, distinct, sample));
+      yield_vector.push_back(interpolate_distinct(outhist, upper_limit, distinct, sample));
       sample += step;
     }
 
     // ENSURE THAT THE MAX TERMS ARE ACCEPTABLE
     size_t counts_before_first_zero = 1;
-    while (counts_before_first_zero < hist.size() &&
-           hist[counts_before_first_zero] > 0)
+    while (counts_before_first_zero < outhist.size() &&
+           outhist[counts_before_first_zero] > 0)
       ++counts_before_first_zero;
     
     size_t max_terms = std::min(orig_max_terms, counts_before_first_zero - 1);
@@ -351,7 +351,7 @@ extrap_bootstrap(const bool VERBOSE, const bool DEFECTS,
     if(DEFECTS){
       vector<double> ps_coeffs;
       for (size_t j = 1; j <= max_terms; j++)
-	ps_coeffs.push_back(hist[j]*std::pow((double)(-1), (int)(j + 1)) );
+	ps_coeffs.push_back(outhist[j]*std::pow((double)(-1), (int)(j + 1)) );
     
       const ContinuedFraction
 	defect_cf(ps_coeffs, diagonal, max_terms);
@@ -373,7 +373,7 @@ extrap_bootstrap(const bool VERBOSE, const bool DEFECTS,
 	lower_cfa(diagonal, max_terms);
 
       const ContinuedFraction
-	lower_cf(lower_cfa.optimal_cont_frac_distinct(hist));
+	lower_cf(lower_cfa.optimal_cont_frac_distinct(outhist));
 
       //extrapolate the curve start
       if (lower_cf.is_valid()){
