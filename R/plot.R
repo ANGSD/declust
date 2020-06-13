@@ -1,0 +1,12 @@
+pdf("res.pdf")
+a<-read.table("delme3.table.txt",he=T)
+b<-read.table("delme4.table.txt",he=T)
+
+plot(a[,1],a[,2],ylim=range(range(cbind(a[,2:4],b[,2:4]))),col='yellow',type='l',lwd=4)
+lines(a[,1],a[,3],col='red',type='l',lwd=4)
+lines(a[,1],a[,4],col='red',type='l',lwd=4)
+lines(b[,1],b[,2],ylim=range(range(cbind(a[,2:4],b[,2:4]))),col='black',type='l',lwd=2)
+lines(b[,1],b[,3],col='green',type='l',lwd=1)
+lines(b[,1],b[,4],col='green',type='l',lwd=1)
+legend("center",c("GSL","-std=c++11","GSL-conf","-std=c++11-conf"),fill=c('yellow',"black","red","green"))
+dev.off()

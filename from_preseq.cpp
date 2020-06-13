@@ -20,19 +20,25 @@
 #include <iostream>
 #include <sys/types.h>
 #include <unistd.h>
-#include <random>
+#include <cassert>
+
 #ifdef __WITH_GSL__
 #include <gsl/gsl_cdf.h>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_statistics_double.h>
 #include <gsl/gsl_sf_gamma.h>
+#else
+#include <random>
 #endif
-#include <cassert>
+
 #include "continued_fraction.hpp"
 
 #ifdef __WITH_GSL__
 gsl_rng *rng = NULL;
+#else
+std::default_random_engine generator;   
 #endif
+
 
 
 using namespace std;
@@ -66,9 +72,10 @@ write_predicted_complexity_curve(const string outfile,
 //double gsl_stats_median_from_sorted_data(const double sorted_data[], const size_t stride, const size_t n);
 
 double median_from_sorted_data(const double sorted_data[], const size_t stride, const size_t n){
-  //ifdef __WITH_GSL__
   double vals[2];
+#ifdef __WITH_GSL__
   vals[0] = gsl_stats_median_from_sorted_data(sorted_data,stride,n);
+#endif
   if(n %2 ){
     vals[1] = sorted_data[(n-1)/2];
   }else{
@@ -77,21 +84,21 @@ double median_from_sorted_data(const double sorted_data[], const size_t stride, 
   }
   //  fprintf(stderr,"valsm:\t%f\t%f\n",vals[0],vals[1]);
   return vals[1];
-  //#endif
+
 }
 
 //double gsl_stats_quantile_from_sorted_data(const double sorted_data[], size_t stride, size_t n, double f)
 
 double quantile_from_sorted_data(const double sorted_data[], size_t stride, size_t n, double f){
-  //#ifdef __WITH_GSL__
   double vals[2];
+#ifdef __WITH_GSL__
   vals[0]= gsl_stats_quantile_from_sorted_data(sorted_data, stride, n, f);
+#endif
   int i = floor((n-1)*f);
   double delta = (n-1)*f-i;
   vals[1] = (1-delta)*sorted_data[i]+delta*sorted_data[i+1];
   //  fprintf(stderr,"valsq:\t%f\t%f\n",vals[0],vals[1]);
   return vals[1];
-  //#endif
 }
 
 
@@ -150,8 +157,7 @@ vector_median_and_ci(const vector<vector<double> > &bootstrap_estimates,
   }
 }
 
-static bool
-check_yield_estimates(const vector<double> &estimates) {
+static bool check_yield_estimates(const vector<double> &estimates) {
 
   if (estimates.empty())
     return false;
@@ -172,12 +178,12 @@ check_yield_estimates(const vector<double> &estimates) {
 }
 
 double loggamma(double x){
-  //#ifdef __WITH_GSL__
   double vals[2];
+#ifdef __WITH_GSL__
   vals[0]= gsl_sf_lngamma(x);
+#endif
   vals[1] = lgamma(x);
   //  fprintf(stderr,"valslog:\t%f\t%f\n",vals[0],vals[1]);
-  //#endif
   return vals[1];
 }
 
@@ -199,10 +205,12 @@ interpolate_distinct(vector<double> &hist, size_t N,
   return S - accumulate(numer.begin(), numer.end(), 0);
 }
 
+#ifndef __WITH_GSL__
 double ran_binomial(double p,unsigned int n){
-  std::default_random_engine generator;
+  
   std::binomial_distribution<int> distribution(n,p);
-  return distribution(generator);
+  double val = distribution(generator);
+  return val;
 }
 
 
@@ -211,6 +219,7 @@ void
 tsk_ran_multinomial (const size_t K,
                      const unsigned int N, const double p[], unsigned int n[])
 {
+  //  fprintf(stderr,"[%s]\n",__FUNCTION__);
   size_t k;
   double norm = 0.0;
   double sum_p = 0.0;
@@ -231,8 +240,8 @@ tsk_ran_multinomial (const size_t K,
     {
       if (p[k] > 0.0)
         {
-#ifdef __WITH_GLS__
-          n[k] = gsl_ran_binomial (rng, p[k] / (norm - sum_p), N - sum_n);
+#if __WITH_GSL__
+	  n[k] = gsl_ran_binomial (rng, p[k] / (norm - sum_p), N - sum_n);
 #else
 	  n[k] = ran_binomial(p[k]/(norm-sum_p),N-sum_n);
 #endif
@@ -247,35 +256,46 @@ tsk_ran_multinomial (const size_t K,
     }
 
 }
+#endif
 
 //void gsl_ran_multinomial (const gsl_rng * r, const size_t K, const unsigned int N, const double p[], unsigned int n[]);
 
 void ran_multinomial (const size_t K, const unsigned int N, const double p[], unsigned int n[]){
-#ifdef __WITH_GSL__
+  //  fprintf(stderr,"\t-> K:%lu N:%u\n",K,N);
+#if __WITH_GSL__
   gsl_ran_multinomial(rng,K,N,p,n);
+#else
+  tsk_ran_multinomial(K,N,p,n);
 #endif
+  
 }
 
 
-void resample_hist(const vector<size_t> &vals_hist_distinct_counts,
-              const vector<double> &distinct_counts_hist,
-              vector<double> &out_hist) {
+void resample_hist(const vector<size_t> &orig_hist_bins,
+		   const vector<double> &orig_hist_vals,
+		   vector<double> &out_hist) {
 
-  vector<unsigned int> sample_distinct_counts_hist(distinct_counts_hist.size(), 0);
+  vector<unsigned int> sample_orig_hist_vals(orig_hist_vals.size(), 0);
 
-  const unsigned int distinct =
-    static_cast<unsigned int>(accumulate(distinct_counts_hist.begin(),
-                                         distinct_counts_hist.end(), 0.0));
-
-  ran_multinomial(distinct_counts_hist.size(), distinct,
-                      &distinct_counts_hist.front(),
-                      &sample_distinct_counts_hist.front());
+  const unsigned int N =
+    static_cast<unsigned int>(accumulate(orig_hist_vals.begin(),
+                                         orig_hist_vals.end(), 0.0));
+  
+  ran_multinomial(orig_hist_vals.size(), N,
+                      &orig_hist_vals.front(),
+                      &sample_orig_hist_vals.front());
 
   out_hist.clear();
-  out_hist.resize(vals_hist_distinct_counts.back() + 1, 0.0);
-  for(size_t i = 0; i < sample_distinct_counts_hist.size(); i++)
-    out_hist[vals_hist_distinct_counts[i]] =
-      static_cast<double>(sample_distinct_counts_hist[i]);
+  out_hist.resize(orig_hist_bins.back() + 1, 0.0);
+  for(size_t i = 0; i < sample_orig_hist_vals.size(); i++)
+    out_hist[orig_hist_bins[i]] =
+      static_cast<double>(sample_orig_hist_vals[i]);
+#if 0
+  fprintf(stderr,"out.size.size():%lu\n",out_hist.size());
+  for(int i=0;i<out_hist.size();i++)
+    fprintf(stderr,"[%d]:\t%f\n",i,out_hist[i]);
+  exit(0);
+#endif
 }
 
 
@@ -316,6 +336,7 @@ extrap_bootstrap(const bool VERBOSE, const bool DEFECTS,
     //    fprintf(stderr,"\t-> iter:%d\n",iter);
     vector<double> yield_vector;
     vector<double> outhist;
+    //the function below resamples histgram and puts result into outhist
     resample_hist(orig_hist_bins, orig_hist_vals, outhist);
 
     double sample_vals_sum = 0.0;

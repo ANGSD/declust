@@ -944,7 +944,14 @@ int main(int argc, char **argv){
   }  
   fprintf(stderr,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only);
   fprintf(fp,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only);
-
+#ifdef __WITH_GSL__
+  fprintf(stderr,"\t-> Using GSL library functions\n");
+  fprintf(fp,"\t-> Using GSL library functions\n");
+#else
+  fprintf(stderr,"\t-> Using std=c++11 library functions\n");
+  fprintf(fp,"\t-> Using std=c++11 library functions\n");
+#endif
+  
   if(fname)
     parse_sequencingdata(fn_out,refName,fname,stats_only,nthreads,mapped_only,se_only,mapq,onam3,fp);
   if(histfile){
