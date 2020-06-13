@@ -314,7 +314,12 @@ GoodToulmin2xExtrap(const vector<double> &counts_hist){
 
 
 int lc_extrap(vector<double> &counts_hist,char *nam,double max_extrapolation, double step_size, size_t bootstraps, double c_level,size_t orig_max_terms, int DEFECTS,int VERBOSE, unsigned long int seed) {
-  
+  #if 0
+    for(uint jj=0;jj<counts_hist.size();jj++)
+      fprintf(stderr,"jj:%d :%f\n",jj,counts_hist[jj]);
+    fprintf(stderr,"counts_hist.size(): %lu\n",counts_hist.size());
+    exit(0);
+#endif
   std::string outfile=std::string(nam);
   const size_t MIN_REQUIRED_COUNTS = 4;
   int diagonal = 0;
@@ -422,7 +427,7 @@ int lc_extrap(vector<double> &counts_hist,char *nam,double max_extrapolation, do
 				     yield_estimates, yield_lower_ci_lognormal,
 				     yield_upper_ci_lognormal);
   
-
+    fprintf(stderr,"\t-> Output in: \'%s\'\n",nam);
   return EXIT_SUCCESS;
 }
 

@@ -851,7 +851,7 @@ int main(int argc, char **argv){
   int mapped_only = 0;
   int se_only = 1;
   int stats_only = 0;
-
+  char *histfile=NULL;
   if(argc==1){
     usage(stdout,0);
     return 0;
@@ -868,7 +868,7 @@ int main(int argc, char **argv){
   };
   
   while ((c = getopt_long(argc, argv,
-			  "bCo:T:p:@:q:mwe:s:n:c:x:D:r:a:",
+			  "bCo:T:p:@:q:mwe:s:n:c:x:D:r:a:H:",
 			  lopts, NULL)) >= 0) {
     switch (c) {
     case 'b': out_mode[1] = 'b'; break;
@@ -887,6 +887,7 @@ int main(int argc, char **argv){
     case 'c': c_level = atof(optarg); break;
     case 'x': orig_max_terms = atoi(optarg); break;
     case 'D': DEFECTS = atoi(optarg); break;
+    case 'H': histfile = strdup(optarg); break;
     case 'v': VERBOSE = atoi(optarg); break;
         case '?':
 	  if (optopt == '?') {  // '-?' appeared on command line
@@ -911,9 +912,10 @@ int main(int argc, char **argv){
       break;
     }
   }
-  fname = strdup(argv[optind]);
-
-  if(!fname){
+  if(optind<argc)
+    fname = strdup(argv[optind]);
+  
+  if(!fname&&!histfile){
     fprintf(stderr,"\t-> No input file specified\n");
     usage(stdout,0);
     return 0;
@@ -945,7 +947,21 @@ int main(int argc, char **argv){
 
   if(fname)
     parse_sequencingdata(fn_out,refName,fname,stats_only,nthreads,mapped_only,se_only,mapq,onam3,fp);
-    
+  if(histfile){
+    FILE *histfile_fp = NULL;
+    histfile_fp = fopen(histfile,"rb");
+    assert(histfile_fp);
+    char histbuf[4096];
+    while(fgets(histbuf,4096,histfile_fp)){
+      size_t bin = atol(strtok(histbuf,"\t\t\n "));
+      size_t value = atol(strtok(NULL,"\t\t\n "));
+      if(bin>=histogram_l)
+	tsktsk();
+      //      fprintf(stderr,"bin: %lu value:%lu\n",bin,value);
+      histogram[bin] = value;
+    }
+    fclose(histfile_fp);
+  }
   
   int last=0;
   for(int i=0;i<histogram_l;i++)
