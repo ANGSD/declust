@@ -491,10 +491,11 @@ int lc_extrap(vector<double> &counts_hist,char *nam,double max_extrapolation, do
 
     // check to make sure library is not overly saturated
     const double two_fold_extrap = GoodToulmin2xExtrap(counts_hist);
-    if(two_fold_extrap < 0.0)
+    if(two_fold_extrap < 0.0){
       fprintf(stderr,"Library expected to saturate in doubling of "
                               "size, unable to extrapolate");
-
+      return 0;
+    }
 
     size_t total_reads = 0;
     for(size_t i = 0; i < counts_hist.size(); i++){
