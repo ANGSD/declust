@@ -12,6 +12,7 @@
 #include <getopt.h>
 #include <ctime>
 #include <string.h>
+#include <math.h>
 
 #ifndef MIN
 #define MIN(a,b) ((a)<(b)?(a):(b))
@@ -19,6 +20,8 @@
 
 size_t *histogram = NULL;
 size_t histogram_l = 4096;
+
+
 
 //void globalize(double *x, double *y, short int swath, short int tile){
 	//int xlen=32103;
@@ -53,7 +56,6 @@ void tsktsk(){
 	histogram=tmptmp;
 }
 
-double pxdist=12000;
 
 typedef struct{
 	bam1_t **d;//data
@@ -61,6 +63,7 @@ typedef struct{
 	unsigned m;//maxpos;
 }queue_t;
 
+double pxdist=12000;
 size_t totaldups=0;
 size_t pcrdups=0;
 size_t clustdups=0;
@@ -161,14 +164,14 @@ char *bam_get_library(bam_hdr_t *h, const bam1_t *b)
 		if (strncmp(rg, ID, strlen(rg)) != 0 || ID[strlen(rg)] != '\t')
 			continue;
 
-		// Valid until next query
+		// Valid until next qual
 		static char LB_text[1024];
 		for (cp = LB; *cp && *cp != '\t' && *cp != '\n'; cp++)
 			;
 		strncpy(LB_text, LB, MIN(cp-LB, 1023));
 		LB_text[MIN(cp-LB, 1023)] = 0;
 
-		// Return it; valid until the next query.
+		// Return it; valid until the next qual.
 		return LB_text;
 	}
 
@@ -201,6 +204,7 @@ typedef struct{
 char *mystr =new char[2048];
 
 double euc_dist(reldata &a,reldata &b){
+
 	double dx=a.xs-b.xs;
 	double dy=a.ys-b.ys;
 	double dist = sqrt(dx*dx+dy*dy);
@@ -266,25 +270,40 @@ void plugin(std::map<size_t,std::vector<reldata> > &mymap,bam1_t *b,bam_hdr_t *h
 
 	// 
 	// given tile id 1234
-	// surf, swath and tile defined as following:
+	// surf, swath and tile are officially defined as following:
 	//
 	// 1			2		34
 	// -			-		--
 	// surface		swath	tile
 	// 
 
-	//[rlen,lib,lane,strand,tile]
-	//tile 4digits
-	//lane 1digit
-	//lib assumed 3 digits
-	//1111+2e4+333e5+444*1e8
+	// 
+	// READLENGTH+LIBID+LANE+SURFACE
+	// XXX+YYY+Z+T 
 
+	//TODO size_t may be unnecessary here
+	//size_t key=surf;//one digit// 0,1
+	//key += lane*1e1;//one digit// 0,1,2,3
+	//key += libid*1e2;//3 digits// 0-999
+	//key += b->core.l_qseq*1e5;//3 digits// this is readlength, assume max is 999
 
-	//size_t key=tile;
-	size_t key=surf;
-	key += lane*1e4;
-	key += libid*1e5;
-	key += b->core.l_qseq*1e8;
+	//library id; max 999
+	size_t key=libid;
+	//read length; max 999
+	key += b->core.l_qseq*1e3;
+
+	//edit 21may21: now key does not include lane and surface
+	//to have all pcrdups in the same loop
+
+	//dummy numbers to check the key
+	//surface
+	//size_t key=1;//one digit// 0,1
+	//lane
+	//key += 2*1e1;//one digit// 0,1,2,3
+	//libid
+	//key += 333*1e2;//libid 3 digits// 0-999
+	//read length
+	//key += 444*1e5;//3 digits// this is readlength, assume max is 999
 
 	std::map<size_t,std::vector<reldata> >::iterator it =mymap.find(key);
 	if(it==mymap.end()){
@@ -294,7 +313,6 @@ void plugin(std::map<size_t,std::vector<reldata> > &mymap,bam1_t *b,bam_hdr_t *h
 	}else{
 		it->second.push_back(point);
 	}
-	//  fprintf(stderr,"Spooling duplicates after:%lu\n",mymap.size());
 }
 
 //fp=nocluster,fp2=onlyclusterdup,fp3=pure
@@ -304,58 +322,82 @@ void plugin(std::map<size_t,std::vector<reldata> > &mymap,bam1_t *b,bam_hdr_t *h
    clustdup should contain all clusterdups
    */
 
-
-//fp=noclusterdup,fp2=onlyclusterdup
+//OUTPUT FILES
+//
+//fp =  noclusterdup
+//fp2 = onlyclusterdup
+//
+//
 void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFile *fp,samFile *fp2,size_t &counter){
-	printf("\n\nloop\n\n");
+	//TODO check loop count
+	//printf("\n\nloop\n\n");
+	//TODO check counter TODO TODO very important!!
 
-	//looping over different libraries, lanes, etc
+	//OLD:looping over different libraries, lanes, readlength, surface
+	//
+	//loop over same libid+readlength combination
+	//in the same mapping position
 	for(std::map<size_t,std::vector<reldata> >::iterator it=mymap.begin();it!=mymap.end();it++) {
-		printf("\n\nmaploop\n\n");
+		//TODO below statement meaning?
 		//prints one read picked from all reads that has the same position
+
 		std::vector<reldata> &rd=it->second;
 			fprintf(stderr,"info %lu\n",rd.size());
-		//only one read in lane,lib,strand,tile
+			
+		//only one read in libid+readlength+mappos
+		//thus it is not a duplicate
 		if(rd.size()==1){
-			pcrdups++;
-			counter++;
-			noclusterdupcount++;
-			if(fp)
-				assert(sam_write1(fp, hdr,rd[0].d)>=0);
-			continue;
+			printf("\n\nONE READ IN RD, not a duplicate\n\n");
+			//pcrdups++;
+			//counter++;
+
+			//noclusterdupcount++;
+			//if(fp)
+				//assert(sam_write1(fp, hdr,rd[0].d)>=0);
+			//continue;
 		}
 
 
-		for(int i=0;0&&i<rd.size();i++)
-			fprintf(stderr,"\tcc key: %lu/%lu val: xs:%d ys:%d pos:%lld\n",it->first,rd.size(),rd[i].xs,rd[i].ys,rd[i].d->core.pos+1);
+//#if 0
+		for(int i=0;i<rd.size();i++)
+			fprintf(stderr,"\tcc key: %lu/%lu val: xs:%ld ys:%ld pos:%lld\n",it->first,rd.size(),rd[i].xs,rd[i].ys,rd[i].d->core.pos+1);
+//#endif
 
 
-		//case where two reads come from same lane,lib tile
 		if(rd.size()==2){
 			double dist = euc_dist(rd[0],rd[1]);
-			 fprintf(stderr,"dist is:%f\n",dist);
+			fprintf(stderr,"dist is:%f\n",dist);
 			//      sd=math.sqrt(((coordsm[0]-coordsl[0])**2)+((coordsm[1]-coordsl[1])**2))
-			if(dist>pxdist){//not part of same cluster
+			if(dist>pxdist){
+				//not part of same cluster
+				//we have 2 pcr duplicates
 				counter+=2;
+				pcrdups+=2 ;
+				noclusterdupcount+=2;
 				if(fp){
 					assert(sam_write1(fp, hdr,rd[0].d)>=0);      
 					assert(sam_write1(fp, hdr,rd[1].d)>=0);
 				}
-				pcrdups +=2 ;
-				noclusterdupcount+=2;
-			}else{//same cluster
-				if(fp2){
-					assert(sam_write1(fp2, hdr,rd[0].d)>=0);
-					assert(sam_write1(fp2, hdr,rd[1].d)>=0);
-				}
+			}else{
+				//same cluster
+				//two reads form a cluster
+				//we have 1 pcr duplicate and 1 cluster duplicate
 				counter++;
+				pcrdups++;
+				noclusterdupcount++;
+
+				clustdups++ ;
 				if(fp)
 					assert(sam_write1(fp, hdr,rd[0].d)>=0);
-				pcrdups +=1;
-				clustdups++ ;
-				noclusterdupcount++;
+				if(fp2){
+					//assert(sam_write1(fp2, hdr,rd[0].d)>=0);
+					assert(sam_write1(fp2, hdr,rd[1].d)>=0);
+				}
 			}
 			continue;
+			//one of them is the original read
+			//-1 to not to report the original one
+			pcrdups--;
 		}
 		if(rd.size()==3){
 			double dist[3] = {euc_dist(rd[0],rd[1]),euc_dist(rd[0],rd[2]),euc_dist(rd[1],rd[2])};
@@ -369,61 +411,72 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
 
 			// fprintf(stderr,"dist is:%f\n",dist);
 			//      sd=math.sqrt(((coordsm[0]-coordsl[0])**2)+((coordsm[1]-coordsl[1])**2))
-			if(val==0){//not part of same cluster
+			if(val==0){
+				// not part of the same cluster
+				// 3 pcr duplicates
 				counter += 3;
+				pcrdups +=3 ;
+				noclusterdupcount+=3;
 				if(fp){
 					assert(sam_write1(fp, hdr,rd[0].d)>=0);      
 					assert(sam_write1(fp, hdr,rd[1].d)>=0);
 					assert(sam_write1(fp, hdr,rd[2].d)>=0);
 				}
-				pcrdups +=3 ;
-				noclusterdupcount+=3;
-			}else if (val>=2){//same cluster
+			}else if (val>=2){
+				// 3 reads form a cluster
+				// one pcr duplicate + 2 cluster duplicates
+				counter++;
+				pcrdups++;
+				noclusterdupcount++;
+				clustdups+=2 ;
+				if(fp)
+					assert(sam_write1(fp, hdr,rd[0].d)>=0);
 				if(fp2){
-					assert(sam_write1(fp2, hdr,rd[0].d)>=0);
+					//assert(sam_write1(fp2, hdr,rd[0].d)>=0);
 					assert(sam_write1(fp2, hdr,rd[1].d)>=0);
 					assert(sam_write1(fp2, hdr,rd[2].d)>=0);
 				}
-				counter++;
-				if(fp)
-					assert(sam_write1(fp, hdr,rd[0].d)>=0);
-				pcrdups +=1;
-				noclusterdupcount++;
-				clustdups++ ;
-			}else if (val==1){//2 in cluster one outside
+			}else if (val==1){
+				//2 in cluster one outside
+				//1 pcr duplicate + (1 pcr duplicate+1cluster duplicate)
 				counter +=2;
-				if(d01<pxdist){//rd0 and rd1 defines a cluster, rd2 outside
-					if(fp2 && fp){
-						assert(sam_write1(fp2, hdr,rd[0].d)>=0);
-						assert(sam_write1(fp2, hdr,rd[1].d)>=0);
+				pcrdups +=2;
+				noclusterdupcount +=2 ;
+				clustdups++ ;
+
+				if(d01<pxdist){
+					//rd0 and rd1 defines a cluster, rd2 outside
+					clustdups++ ;
+					if(fp){
 						assert(sam_write1(fp, hdr,rd[0].d)>=0);
 						assert(sam_write1(fp, hdr,rd[2].d)>=0);
 					}
-					pcrdups +=2;
-					noclusterdupcount +=2 ;
-					clustdups++ ;
-				}
-				else if(d02<pxdist){//rd0 and rd2 defines a cluster, rd1 outside
-					if(fp2&&fp){
-						assert(sam_write1(fp2, hdr,rd[0].d)>=0);
-						assert(sam_write1(fp2, hdr,rd[2].d)>=0);
-						assert(sam_write1(fp, hdr,rd[0].d)>=0);
-						assert(sam_write1(fp, hdr,rd[1].d)>=0);
-					}
-					pcrdups +=2;
-					noclusterdupcount +=2 ;
-					clustdups++ ;
-				}
-				else if(d12<pxdist){//rd1 and rd2 defines a cluster, rd0 outside
-					if(fp2&&fp){
+					if(fp2){
+						//assert(sam_write1(fp2, hdr,rd[0].d)>=0);
 						assert(sam_write1(fp2, hdr,rd[1].d)>=0);
-						assert(sam_write1(fp2, hdr,rd[2].d)>=0);
-						assert(sam_write1(fp, hdr,rd[1].d)>=0);
-						assert(sam_write1(fp, hdr,rd[0].d)>=0);
 					}
-					pcrdups +=2;
-					noclusterdupcount +=2 ;
-					clustdups++ ;
+				}
+				else if(d02<pxdist){
+					//rd0 and rd2 defines a cluster, rd1 outside
+					if(fp){
+						assert(sam_write1(fp, hdr,rd[0].d)>=0);
+						assert(sam_write1(fp, hdr,rd[1].d)>=0);
+					}
+					if(fp2){
+						//assert(sam_write1(fp2, hdr,rd[0].d)>=0);
+						assert(sam_write1(fp2, hdr,rd[2].d)>=0);
+					}
+				}
+				else if(d12<pxdist){
+					//rd1 and rd2 defines a cluster, rd0 outside
+					if(fp){
+						assert(sam_write1(fp, hdr,rd[0].d)>=0);
+						assert(sam_write1(fp, hdr,rd[1].d)>=0);
+					}
+					if(fp2){
+						//assert(sam_write1(fp2, hdr,rd[1].d)>=0);
+						assert(sam_write1(fp2, hdr,rd[2].d)>=0);
+					}
 				}else{
 					fprintf(stderr,"never happens\n");
 					exit(0);
@@ -433,42 +486,18 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
 				fprintf(stderr,"never happens");
 				exit(0);
 			}
+			//one of them is the original read
+			//-1 to not to report the original one
+			pcrdups--;
 			continue;
 		}
-
-		//case with more than 2 reads. We therefore find the center of all points. And find the difference from the center
-		//old version
-#if 0
-		double dx =0;
-		double dy =0;
-		for(int i=0;i<rd.size();i++){
-			dx += rd[i].xs;
-			dy += rd[i].ys;
-		}
-		double cx = dx/(1.0*rd.size());
-		double cy = dy/(1.0*rd.size());
-
-		for(int i=0;i<rd.size();i++){
-			double dx=rd[i].xs-cx;
-			double dy=rd[i].ys-cy;
-			double dist = sqrt(dx*dx+dy*dy);
-
-			//      fprintf(stderr,"center is: %f %f pos:%d dist:%f\n",cx,cy,rd[0].d->core.pos+1,dist);
-			if(dist>(pxdist/2.0)){
-				if(fp)
-					assert(sam_write1(fp, hdr,rd[i].d)>=0);      
-			}else
-				if(fp2)
-					assert(sam_write1(fp2, hdr,rd[i].d)>=0);      
-
-		}
-#endif
+		printf("\n\nRD SIZE > 3\n\n");
 
 		//vector of vectors, containing ids for the reads that cluster together
 		std::vector<std::vector<int> > clusters;
 
 		for(int i=0;i<rd.size();i++) {
-			//      print_clusters(clusters);
+				  //print_clusters(clusters);
 			//      fprintf(stderr,"analysing rd:%d\n",i);
 			char dingdongsong[rd.size()];//initialize a hit vector that tells us if the current read is close enough to the different clusters
 			memset(dingdongsong,0,rd.size());
@@ -496,6 +525,8 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
 				nclust += dingdongsong[s];
 			}
 			//      fprintf(stderr,"nclust: %d\n",nclust);
+			//
+			//
 			if(nclust==0){//case where it is not within pixel dist to any
 				//fprintf(stderr,"\t-> creating new cluster\n");
 				std::vector<int> tmp;tmp.push_back(i);
@@ -511,6 +542,7 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
 					}
 			}if(nclust>1){
 				//	fprintf(stderr,"multiclust: nclust:%d\n",nclust);
+				//	keep array is number of clusters long, and will contain which clusters to merge
 				int keep[nclust];
 				int at=0;
 				for(int j=0;j<rd.size();j++){
@@ -527,34 +559,55 @@ void plugout(std::map<size_t,std::vector<reldata> > &mymap,bam_hdr_t *hdr,samFil
 				for(int j=nclust-1;j>0;j--){
 					clusters.erase(clusters.begin()+keep[j]);
 				}
+				// we started with read i, and this caused us to merge clusters because it is within pixel distance to both
+				// , now we finally append the ith read into the merged cluster list
 				clusters[keep[0]].push_back(i);
 				//	print_clusters(clusters);
 			}
 		}
 
-		//    print_clusters(clusters);
-		//    fprintf(stderr,"\t-> Flushing\n");
+		printf("\n\n---------printing clusters:\n\n");
+		print_clusters(clusters);
+		//fprintf(stderr,"\t-> Flushing\n");
 		//loop over groupings
+
 		for(int i=0;i<clusters.size();i++){
-			//      fprintf(stderr,"bangbang: %lu tid:%d pos: %d\n",clusters.size(),rd[0].d->core.tid,rd[0].d->core.pos+1);
+
+			//fprintf(stderr,"bangbang: %lu tid:%d pos: %d\n",clusters.size(),rd[0].d->core.tid,rd[0].d->core.pos+1);
 			std::vector<int> &tmp = clusters[i];
-			//      fprintf(stderr,"tmp.size():%lu\n",tmp.size());
+			fprintf(stderr,"tmp.size():%lu\n",tmp.size());
+
+			printf("\n\nHERE\n\n");
+
+			//TODO can it be empty tho?
 			if(tmp.size()>0){
+
+				//one cluster of cluster duplicates
+				//one pcr duplicate [founder]
+				//rest is its cluster duplicates
+
 				pcrdups++;
 				noclusterdupcount++;
 				counter++;
+
 				if(fp)
 					assert(sam_write1(fp, hdr,rd[tmp[0]].d)>=0);
-			}if(tmp.size()<3)//case==1 and case==2 has been treated seperately
-			continue;
-			for(int j=0;j<tmp.size();j++){
-				clustdups++;
-				if(fp2)
-					assert(sam_write1(fp2, hdr,rd[tmp[j]].d)>=0);
+
+				//skip the first read, assume it is the founder pcr duplicate
+				//rest of the reads are cluster duplicates
+				for(int j=1;j<tmp.size();j++){
+					clustdups++;
+					if(fp2)
+						assert(sam_write1(fp2, hdr,rd[tmp[j]].d)>=0);
+				}
 			}
 		}
+		//one of them is the original read
+		//-1 to not to report the original one
+		pcrdups--;
 	}
-	fprintf(stderr,"\nHERE pcrdups:%d\n",pcrdups);
+	//fprintf(stderr,"\nhere pcrdups:%d\n",pcrdups);
+	fprintf(stderr,"\nhere COUNTER:%d\n",counter);
 }
 
 void printmap(FILE *fp,std::map<size_t,std::vector<reldata> > &mymap){
@@ -1029,11 +1082,13 @@ int main(int argc, char **argv){
 	std::vector<double> to_preseq;
 	for(int i=0;i<=last;i++){
 		fprintf(fphist,"%d\t%lu\n",i,histogram[i]);
+		fprintf(stderr,"\n\nHISTOGRAM:\n%d\t%lu\n",i,histogram[i]);
 		to_preseq.push_back(histogram[i]);
 	}
 	fclose(fphist);
 	int lc_extrap(std::vector<double> &counts_hist,char *nam,double max_extrapolation, double step_size, size_t bootstraps, double c_level,size_t orig_max_terms, int DEFECTS,int VERBOSE, unsigned long int seed);
-	lc_extrap(to_preseq,onamtable,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed);
+	//TODO downstream
+	//lc_extrap(to_preseq,onamtable,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed);
 	fclose(fp);
 	fprintf(stderr,
 			"\t[ALL done] cpu-time used =  %.2f sec\n"
