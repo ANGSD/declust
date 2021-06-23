@@ -21,9 +21,6 @@
 size_t *histogram = NULL;
 size_t histogram_l = 4096;
 
-//NOTE TODO
-// -
-
 
 int globalX(double x, int xlen, short int swath){
 	return ((swath-1)*(xlen))+(x);
@@ -268,7 +265,7 @@ void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1
 
 		}
 	}
-	fprintf(stderr,"surface:%d, swath:%d, tile:%d, libid:%d lane:%d rlen:%d xs:%d ys:%d\n",surf,swath,tile,libid,lane,b->core.l_qseq,point.xs,point.ys);
+	//fprintf(stderr,"surface:%d, swath:%d, tile:%d, libid:%d lane:%d rlen:%d xs:%d ys:%d\n",surf,swath,tile,libid,lane,b->core.l_qseq,point.xs,point.ys);
 
 	// 
 	// given tile id 1234
@@ -292,7 +289,7 @@ void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1
 	key2 += lane*1e1;
 
 	//mymap is the outer map
-	fprintf(stderr,"\nkey:%d, key2:%d surface:%d, swath:%d, tile:%d, libid:%d lane:%d rlen:%d xs:%d ys:%d\n----\n\n",key,key2,surf,swath,tile,libid,lane,b->core.l_qseq,point.xs,point.ys);
+	//fprintf(stderr,"\nkey:%d, key2:%d surface:%d, swath:%d, tile:%d, libid:%d lane:%d rlen:%d xs:%d ys:%d\n----\n\n",key,key2,surf,swath,tile,libid,lane,b->core.l_qseq,point.xs,point.ys);
 	std::map<size_t,std::map<size_t, std::vector<reldata>>>::iterator it= mymap.find(key);
 	//key not found
 	if(it==mymap.end()){
@@ -359,7 +356,7 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 			std::vector<reldata> &rd=in->second;
 
 			//std::vector<reldata> &rd=it->second;
-			fprintf(stderr,"\nrd size: %lu\n",rd.size());
+			//fprintf(stderr,"\nrd size: %lu\n",rd.size());
 			totaldups+=rd.size();
 
 			//just a pcr duplicate alone in SURFACE+TILE
@@ -376,13 +373,13 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 
 			//#if 0
 			for(int i=0;i<rd.size();i++)
-				fprintf(stderr,"\tcc key: out %lu in %lu/%lu val: xs:%d ys:%d pos:%d\n",it->first,in->first,rd.size(),rd[i].xs,rd[i].ys,rd[i].d->core.pos+1);
+				//fprintf(stderr,"\tcc key: out %lu in %lu/%lu val: xs:%d ys:%d pos:%d\n",it->first,in->first,rd.size(),rd[i].xs,rd[i].ys,rd[i].d->core.pos+1);
 			//#endif
 
 
 			if(rd.size()==2){
 				double dist = euc_dist(rd[0],rd[1]);
-				fprintf(stderr,"dist is:%f\n",dist);
+				//fprintf(stderr,"dist is:%f\n",dist);
 
 				if(dist>pxdist){
 					//not part of same cluster
@@ -581,7 +578,7 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 			}
 
 			//printf("\n\n---------printing clusters:\n\n");
-			print_clusters(clusters);
+			//print_clusters(clusters);
 			//fprintf(stderr,"\t-> Flushing\n");
 			//loop over groupings
 
@@ -589,9 +586,8 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 
 				//fprintf(stderr,"bangbang: %lu tid:%d pos: %d\n",clusters.size(),rd[0].d->core.tid,rd[0].d->core.pos+1);
 				std::vector<int> &tmp = clusters[i];
-				fprintf(stderr,"tmp.size():%lu\n",tmp.size());
+				//fprintf(stderr,"tmp.size():%lu\n",tmp.size());
 
-				//printf("\n\nHERE\n\n");
 
 				//TODO can it be empty tho?
 				if(tmp.size()>0){
@@ -620,13 +616,10 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 			//-1 to not to report the original one
 			//pcrdups--;
 		}
-		//printf("\nHERE~~~~~~~~~~~~3~~~\n");
 		//fprintf(stderr,"\nhere COUNTER:%d\n",dcount);
 		counter.push_back(dcount);
-		//printf("\nHERE~~~~~~~~~~~~4~~~\n");
 		dcount=0;
 		//pcrdups--;
-		totaldups--;
 		pcrdups=totaldups-clustdups;
 		//fprintf(stderr,"\nhere pcrdups:%d\n",pcrdups);
 	}
@@ -672,10 +665,8 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
 			plugin(mymapF,b,hdr);
 	}
 	std::vector<size_t> counter;
-	//printf("\nHERE~~~~~~~~~~~~1~~~\n");
 	plugout(mymapF,hdr,fp,fp2,counter);
 	plugout(mymapR,hdr,fp,fp2,counter);
-	//printf("\nHERE~~~~~~~~~~~~2~~~\n");
 	for (int c=0; c<counter.size();c++){
 		if(counter[c]>=histogram_l)
 			tsktsk();
@@ -872,7 +863,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname,int stats_only,
 		//then we simply write it to the output
 		if(refId==-1||refId!=b->core.tid){
 			refId=b->core.tid;
-			fprintf(stderr,"\t-> Now at Chromosome: %s\n",hdr->target_name[refId]);
+			//fprintf(stderr,"\t-> Now at Chromosome: %s\n",hdr->target_name[refId]);
 		}
 		if(queue->l==1 && queue->d[0]->core.pos!=b->core.pos){
 			histogram[1]++;
@@ -908,7 +899,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname,int stats_only,
 			CMA = (queue->d[0]->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
 			//noclusterdupcount++;
 		}else{
-			fprintf(stderr,"calling do_magic\n");
+			//fprintf(stderr,"calling do_magic\n");
 			do_magic(queue,hdr,out,out2,nodupFP);
 		}
 		queue->l=0;
@@ -943,9 +934,10 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname,int stats_only,
 				"    Reads processed: %lu\n"
 				"    Total duplicates: %lu\n"
 				"    Cluster duplicates: %lu\n"
-				"    Pcr duplicates: %lu\n"
+				"    Pcr duplicates: %d\n"
 				"%lu\t%lu\t%f\n"
 				,nproc,totaldups,clustdups,pcrdups,purecount,CMA);
+				//"    Pcr duplicates: %lu\n"
 
 
 		fprintf(fp,
@@ -1045,7 +1037,6 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname,int stats_only,
 							  return 0;//usage(stderr, 0);
 						  }
 				default:
-						  fprintf(stderr,"adsadsfasdf\n");
 						  fname = strdup(optarg);
 						  fprintf(stderr,"assinging: %s to fname:%s\n",optarg,fname);
 						  break;
@@ -1116,7 +1107,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname,int stats_only,
 		std::vector<double> to_preseq;
 		for(int i=0;i<=last;i++){
 			fprintf(fphist,"%d\t%lu\n",i,histogram[i]);
-			fprintf(stderr,"\n\nHISTOGRAM:\n%d\t%lu\n",i,histogram[i]);
+			//fprintf(stderr,"\n\nHISTOGRAM:\n%d\t%lu\n",i,histogram[i]);
 			to_preseq.push_back(histogram[i]);
 		}
 		fclose(fphist);

@@ -50,4 +50,3 @@ endif
 
 clean:	
 	rm  -f superduper *.o *.d
-
