@@ -337,11 +337,12 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 	size_t dcount;
 	int plug=0;
 	for(std::map<size_t,std::map<size_t,std::vector<reldata> >>::iterator it=mymap.begin();it!=mymap.end();it++) {
+
 		//dcount= duplicate fragment count, to give preseq
 		dcount=0;
-		//printf("\n\n----> OUTLOOP: %d\n\n",it->first);
-		//
+
 		std::map<size_t,std::vector<reldata>>::iterator in;
+		//printf("\n\n----> OUTLOOP: %d\n\n",it->first);
 		//printf("\n\n----> INMAPSIZE: %d\n\n",it->second.size());
 
 
@@ -357,14 +358,15 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 
 			//std::vector<reldata> &rd=it->second;
 			//fprintf(stderr,"\nrd size: %lu\n",rd.size());
+
+			//TODO
 			totaldups+=rd.size();
 
-			//just a pcr duplicate alone in SURFACE+TILE
+			//just a pcr duplicate alone in a SURFACE+TILE pair
 			if(rd.size()==1){
-				//pcrdups++;
+				pcrdups++;
 				dcount++;
 
-				//noclusterdupcount++;
 				if(fp)
 					assert(sam_write1(fp, hdr,rd[0].d)>=0);
 				continue;
@@ -373,11 +375,12 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 
 			//#if 0
 			for(int i=0;i<rd.size();i++)
-				//fprintf(stderr,"\tcc key: out %lu in %lu/%lu val: xs:%d ys:%d pos:%d\n",it->first,in->first,rd.size(),rd[i].xs,rd[i].ys,rd[i].d->core.pos+1);
+				fprintf(stderr,"\tcc key: out %lu in %lu/%lu val: xs:%d ys:%d pos:%d\n",it->first,in->first,rd.size(),rd[i].xs,rd[i].ys,rd[i].d->core.pos+1);
 			//#endif
 
 
 			if(rd.size()==2){
+
 				double dist = euc_dist(rd[0],rd[1]);
 				//fprintf(stderr,"dist is:%f\n",dist);
 
@@ -385,8 +388,7 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 					//not part of same cluster
 					//we have 2 pcr duplicates
 					dcount+=2;
-					//pcrdups+=2 ;
-					//noclusterdupcount+=2;
+					pcrdups+=2 ;
 					if(fp){
 						assert(sam_write1(fp, hdr,rd[0].d)>=0);      
 						assert(sam_write1(fp, hdr,rd[1].d)>=0);
@@ -396,22 +398,20 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 					//two reads form a cluster
 					//we have 1 pcr duplicate and 1 cluster duplicate
 					dcount++;
-					//pcrdups++;
-					//noclusterdupcount++;
+					pcrdups++;
 
 					clustdups++ ;
 					if(fp)
 						assert(sam_write1(fp, hdr,rd[0].d)>=0);
 					if(fp2){
+						//we do not include the 'founder' pcr duplicate in clustdups
 						//assert(sam_write1(fp2, hdr,rd[0].d)>=0);
 						assert(sam_write1(fp2, hdr,rd[1].d)>=0);
 					}
 				}
 				continue;
-				//one of them is the original read
-				//-1 to not to report the original one
-				//pcrdups--;
 			}
+
 			if(rd.size()==3){
 				double dist[3] = {euc_dist(rd[0],rd[1]),euc_dist(rd[0],rd[2]),euc_dist(rd[1],rd[2])};
 				double d01=dist[0];
@@ -426,8 +426,8 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 					// not part of the same cluster
 					// 3 pcr duplicates
 					dcount += 3;
-					//pcrdups +=3 ;
-					//noclusterdupcount+=3;
+					pcrdups +=3 ;
+
 					if(fp){
 						assert(sam_write1(fp, hdr,rd[0].d)>=0);      
 						assert(sam_write1(fp, hdr,rd[1].d)>=0);
@@ -437,8 +437,7 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 					// 3 reads form a cluster
 					// one pcr duplicate + 2 cluster duplicates
 					dcount++;
-					//pcrdups++;
-					//noclusterdupcount++;
+					pcrdups++;
 					clustdups+=2 ;
 					if(fp)
 						assert(sam_write1(fp, hdr,rd[0].d)>=0);
@@ -450,14 +449,12 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 				}else if (val==1){
 					//2 in cluster one outside
 					//1 pcr duplicate + (1 pcr duplicate+1cluster duplicate)
-					//pcrdups +=2;
+					pcrdups +=2;
 					dcount +=2;
-					//noclusterdupcount +=2 ;
 					clustdups++ ;
 
 					if(d01<pxdist){
 						//rd0 and rd1 defines a cluster, rd2 outside
-						clustdups++ ;
 						if(fp){
 							assert(sam_write1(fp, hdr,rd[0].d)>=0);
 							assert(sam_write1(fp, hdr,rd[2].d)>=0);
@@ -497,11 +494,9 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 					fprintf(stderr,"never happens");
 					exit(0);
 				}
-				//one of them is the original read
-				//-1 to not to report the original one
-				//pcrdups--;
 				continue;
 			}
+
 			//printf("\n\nRD SIZE > 3\n\n");
 
 			//vector of vectors, containing ids for the reads that cluster together
@@ -596,8 +591,7 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 					//one pcr duplicate [founder]
 					//rest is its cluster duplicates
 
-					//pcrdups++;
-					//noclusterdupcount++;
+					pcrdups++;
 					dcount++;
 
 					if(fp)
@@ -612,15 +606,11 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 					}
 				}
 			}
-			//one of them is the original read
-			//-1 to not to report the original one
-			//pcrdups--;
 		}
 		//fprintf(stderr,"\nhere COUNTER:%d\n",dcount);
 		counter.push_back(dcount);
 		dcount=0;
-		//pcrdups--;
-		pcrdups=totaldups-clustdups;
+		//pcrdups=totaldups-clustdups;
 		//fprintf(stderr,"\nhere pcrdups:%d\n",pcrdups);
 	}
 }
@@ -1113,7 +1103,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname,int stats_only,
 		fclose(fphist);
 		int lc_extrap(std::vector<double> &counts_hist,char *nam,double max_extrapolation, double step_size, size_t bootstraps, double c_level,size_t orig_max_terms, int DEFECTS,int VERBOSE, unsigned long int seed);
 		//TODO for downstream enable this
-		lc_extrap(to_preseq,onamtable,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed);
+		//lc_extrap(to_preseq,onamtable,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed);
 		fclose(fp);
 		fprintf(stderr,
 				"\t[ALL done] cpu-time used =  %.2f sec\n"

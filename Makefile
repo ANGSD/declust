@@ -50,3 +50,21 @@ endif
 
 clean:	
 	rm  -f superduper *.o *.d
+
+
+testsams := $(wildcard tests/*sam)
+
+test: $(testsams)
+	for sam in $(testsams); do \
+		samtools view -bS $${sam} > $${sam%.sam}.bam; \
+		./superduper -w $${sam%.sam}.bam -o $${sam%.sam}.out 2> $${sam%.sam}.log; \
+		diff $${sam%.sam}.out.hist.txt $${sam%.sam}.expected.hist.txt; \
+	done
+
+bam: $(testsams)
+	for sam in $(testsams); do \
+		samtools view -bS $${sam} > $${sam%.sam}.bam; \
+	done
+
+testclean:
+	rm -v tests/*.bam tests/*.out* tests/*.log
