@@ -8,7 +8,7 @@ make
 
 ## Usage
 
-```bash
+```
 ./superduper [options] <in.bam>|<in.sam>|<in.cram> 
 
 Options:
