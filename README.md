@@ -77,19 +77,63 @@ Notes:
 
 
 ## Output
-### Summary statistics and frequency distribution tables
 
-MSC - Mean sequence complexity
-MGC - Mean GC content
-MFS - Mean fragment size
-SCD - Sequence complexity distribution
-GCD - GC content distribution
-FSD - Fragment size distribution
+### BAM/CRAM files
 
+- onlyClusterDuplicates.bam: Only includes the “cluster duplicates”.
+- noClusterDuplicates.bam: Includes “pcr duplicates” and one representative read from each cluster.
+- pure.bam: Includes only one representative read from each mapping position.
+
+### Duplicates statistics (dupstat.txt)
+
+- Reads processed: Total number of reads before applying filters.
+- Read count after filters: Total number of reads retained after filters.
+- Total duplicates: Total number of duplicates without a distinction of duplicate type.
+- Cluster duplicates: Total number of Illumina patterned-flowcell related cluster duplicates (also known as well duplicates) detected using reads retained after filters and given pixel distance.
+- PCR duplicates: Total number of PCR duplicates. For each cluster of cluster duplicates, one read from each cluster is being considered as a PCR duplicate.
+
+### Histogram (hist.txt)
+
+The histogram format is as following:
+
+Observed unique fragment count | Number of such observations
+--- | ---
+0 | 0
+1 | 30
+2 | 20
+3 | 10
+
+Interpratation of the example above:
+- We have 30 cases where we observe a fragment once. (There are no duplicates, we have one unique fragment)
+- We have 20 cases where we observe a fragment twice. (We observe a unique fragment 2 times, and they are not cluster duplicates)
+- We have 10 cases where we observe a fragment 3 times. (We observe a unique fragment 3 times, and they are not cluster duplicates)
+
+### Preseq table (table.txt)
+
+
+#### Summary statistics and frequency distribution tables (Optional, -W)
+
+Using `-W` option, you can obtain some additional statistics which will be added to the dupstat.txt file.
+
+- MSC - Mean sequence complexity
+- MGC - Mean GC content
+- MFS - Mean fragment size
+- SCD - Sequence complexity distribution
+- GCD - GC content distribution
+- FSD - Fragment size distribution
   
+You can use the keywords above to extract the corresponding values easily.
+
+Examples:
+
 To extract the sequence complexity distribution (SCD), use:
 
 `grep ^SCD out.dupstat.txt | cut -f 2-`
+
+To extract the mean GC content (MGC), use:
+
+`grep ^SCD out.dupstat.txt | cut -f 2`
+
 
 
 ## Limitations
@@ -102,7 +146,7 @@ To extract the sequence complexity distribution (SCD), use:
 
 ## How to cite
 
-superduper ...
+superduper
 
 The Preseq paper:
    Daley, T., Smith, A. Predicting the molecular complexity of sequencing libraries.
