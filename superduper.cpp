@@ -760,6 +760,7 @@ int usage(FILE *fp, int is_long_help)
 			"  -@ INT   Number of threads to use\n"
 			"  -q INT   Mapping quality filter (default: off)\n"
 			"  -m       Discard unmapped reads (default: off)\n"
+			"  -0       Only calculate statistics; do not run preseq (default: off)\n"
 			"  -w       Only calculate statistics (default: off)\n"
 			"  -W       Calculate additional statistics (default: 0, off)\n"
 			"					Output summary table and frequency distribution tables\n"
@@ -829,7 +830,7 @@ int usage(FILE *fp, int is_long_help)
 	return 0;
 }
 
-void parse_sequencingdata(char *fn_out,char *refName,char *fname,int stats_only,int nthreads,int mapped_only,int se_only,int mapq,char *onam3,FILE *fp, int complexity_thr, int gc_thr, int aux_stats, int min_rLen, int max_rLen){
+void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopreseq,int stats_only,int nthreads,int mapped_only,int se_only,int mapq,char *onam3,FILE *fp, int complexity_thr, int gc_thr, int aux_stats, int min_rLen, int max_rLen){
 
 	htsThreadPool p = {NULL, 0};
 	samFile *in=NULL;
@@ -1149,6 +1150,7 @@ int main(int argc, char **argv){
 	int mapq =-1;
 	int mapped_only = 0;
 	int se_only = 1;
+	int stats_nopreseq = 0;
 	int stats_only = 0;
 	int aux_stats=0; //additional stats
 	char *histfile=NULL;
@@ -1168,7 +1170,7 @@ int main(int argc, char **argv){
 
 	// x: means x has a param; is not a switch
 	while ((c = getopt_long(argc, argv,
-					"bCo:T:p:@:X:G:l:L:q:mwWe:s:n:c:x:D:r:a:H:v",
+					"bCo:T:p:@:X:G:l:L:q:m0wWe:s:n:c:x:D:r:a:H:v",
 					lopts, NULL)) >= 0) {
 		switch (c) {
 			case 'b': out_mode[1] = 'b'; break;
@@ -1184,6 +1186,7 @@ int main(int argc, char **argv){
 			case 'L': max_rLen = atoi(optarg); break;
 			case 'q': mapq = atoi(optarg); break;
 			case 'm': mapped_only = 1; break;
+			case '0': stats_nopreseq = 1; break;
 			case 'w': stats_only = 1; break;
 			case 'W': aux_stats = 1; break;
 			case 'e': max_extrapolation = atof(optarg); break;
@@ -1262,7 +1265,7 @@ int main(int argc, char **argv){
 
 
 	if(fname){
-		parse_sequencingdata(fn_out,refName,fname,stats_only,nthreads,mapped_only,se_only,mapq,onam3,fp,complexity_thr, gc_thr,aux_stats, min_rLen, max_rLen);
+		parse_sequencingdata(fn_out,refName,fname,stats_nopreseq,stats_only,nthreads,mapped_only,se_only,mapq,onam3,fp,complexity_thr, gc_thr,aux_stats, min_rLen, max_rLen);
 
 	}
 	if(histfile){
@@ -1296,8 +1299,11 @@ int main(int argc, char **argv){
 	}
 
 	fclose(fphist);
-	int lc_extrap(std::vector<double> &counts_hist,char *nam,double max_extrapolation, double step_size, size_t bootstraps, double c_level,size_t orig_max_terms, int DEFECTS,int VERBOSE, unsigned long int seed);
-	lc_extrap(to_preseq,onamtable,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed);
+
+	if(!stats_nopreseq){
+		int lc_extrap(std::vector<double> &counts_hist,char *nam,double max_extrapolation, double step_size, size_t bootstraps, double c_level,size_t orig_max_terms, int DEFECTS,int VERBOSE, unsigned long int seed);
+		lc_extrap(to_preseq,onamtable,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed);
+	}
 	fclose(fp);
 	fprintf(stderr,
 			"\n"

@@ -52,20 +52,14 @@ clean:
 	rm  -f superduper *.o *.d
 
 
-testsams := $(wildcard tests/*sam)
+testbams := $(wildcard tests/*bam)
 
 #TODO add dupstat checks
-test: $(testsams)
-	for sam in $(testsams); do \
-		samtools view -bS $${sam} > $${sam%.sam}.bam; \
-		./superduper -w $${sam%.sam}.bam -o $${sam%.sam}.out 2> $${sam%.sam}.log; \
-		diff $${sam%.sam}.out.hist.txt $${sam%.sam}.expected.hist; \
+test: $(testbams)
+	for bam in $(testbams); do \
+		./superduper -0 -w $${bam} -o $${bam%.bam}.out 2> $${bam%.bam}.log; \
+		diff $${bam%.bam}.out.hist.txt $${bam%.bam}.expected.hist; \
 	done
 
-bam: $(testsams)
-	for sam in $(testsams); do \
-		samtools view -bS $${sam} > $${sam%.sam}.bam; \
-	done
-
-testclean:
+cleantest:
 	rm -v tests/*.bam tests/*.out* tests/*.log
