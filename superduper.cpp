@@ -363,6 +363,7 @@ void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1
 
 		}
 	}
+	//DEBUG
 	//fprintf(stderr,"surface:%d, swath:%d, tile:%d, libid:%d lane:%d rlen:%d xs:%d ys:%d\n",surf,swath,tile,libid,lane,b->core.l_qseq,point.xs,point.ys);
 
 	// 
@@ -437,7 +438,7 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 			//first it came with its family
 			//but it is alone now because he has a unique length
 			if(rd.size()==1){
-				//pcrdups++;
+				pcrdups++;
 				dcount++;
 
 				if(fp)
@@ -761,7 +762,7 @@ int usage(FILE *fp, int is_long_help)
 			"  -q INT   Mapping quality filter (default: off)\n"
 			"  -m       Discard unmapped reads (default: off)\n"
 			"  -0       Only calculate statistics; do not run preseq (default: off)\n"
-			"  -w       Only calculate statistics (default: off)\n"
+			"  -w       Only calculate statistics and run preseq; do not output bam files (default: off)\n"
 			"  -W       Calculate additional statistics (default: 0, off)\n"
 			"					Output summary table and frequency distribution tables\n"
 			"								MSC - Mean sequence complexity\n"
