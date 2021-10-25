@@ -142,6 +142,7 @@ To extract the mean GC content (MGC), use:
   2) Does not use the flag field (external duplicate level e.g flag 1024)
   3) Does not work with SAM files.
   4) Does not with with regions 
+  5) Does not work with multiple libraries
 
 
 ## How to cite
