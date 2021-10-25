@@ -1,5 +1,6 @@
 #modied from htslib makefile
-FLAGS=-O3 -std=c++11
+#FLAGS=-O3 -std=c++11
+FLAGS=-ggdb -std=c++11
 
 CFLAGS += $(FLAGS)
 CXXFLAGS += $(FLAGS)
@@ -50,3 +51,16 @@ endif
 clean:	
 	rm  -f superduper *.o *.d
 
+
+testbams := $(wildcard tests/*bam)
+
+#TODO add dupstat checks
+test: $(testbams)
+	for bam in $(testbams); do \
+		./superduper -0 -w $${bam} -o $${bam%.bam}.test 2> $${bam%.bam}.log; \
+		diff $${bam%.bam}.test.hist.txt $${bam%.bam}.expected.hist.txt; \
+		bash -c "diff <(sed 1d $${bam%.bam}.test.dupstat.txt) <(sed 1d $${bam%.bam}.expected.dupstat.txt)"; \
+	done
+
+cleantest:
+	rm -v tests/*.test* tests/*.log
