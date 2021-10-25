@@ -1,3 +1,5 @@
+## [![tests](https://github.com/ANGSD/declust/actions/workflows/tests.yml/badge.svg)](https://github.com/ANGSD/declust/actions/workflows/tests.yml) declust
+
 ## Installation
 
 ```bash
