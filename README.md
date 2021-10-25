@@ -147,7 +147,7 @@ To extract the mean GC content (MGC), use:
 
 ## How to cite
 
-superduper
+declust paper
 
 The Preseq paper:
    Daley, T., Smith, A. Predicting the molecular complexity of sequencing libraries.
@@ -155,4 +155,4 @@ The Preseq paper:
 
 
 ## License
-GPLv3?
+GNU General Public License v3.0
