@@ -13,6 +13,7 @@
 #include <ctime>
 #include <string.h>
 #include <math.h>
+#include <string>
 
 #ifndef MIN
 #define MIN(a,b) ((a)<(b)?(a):(b))
@@ -126,11 +127,12 @@ r_aux get_aux_stats(r_aux raux, uint8_t *qseq, int rLen, int aux_dostat){
 }
 
 
-int getTileInfo(char *tileId, unsigned short int *surf, unsigned short int *swath, unsigned short int *tile) {
-	std::string str(tileId);
-	*surf = std::stoi(str.substr(0,1));
-	*swath = std::stoi(str.substr(1,1));
-	*tile = std::stoi(str.substr(2,2));
+void getTileInfo(char *tileId, unsigned short int *surf, unsigned short int *swath, unsigned short int *tile) {
+  //tsk consider strtok or sscanf. std::string is slow
+  std::string str(tileId);
+  *surf = std::stoi(str.substr(0,1));
+  *swath = std::stoi(str.substr(1,1));
+  *tile = std::stoi(str.substr(2,2));
 }
 
 void tsktsk(){
@@ -290,7 +292,7 @@ typedef struct{
 	//TODO
 	//unsigned long int xs;
 	//unsigned long int ys;
-	long long int xs;
+	long long int xs;//long long?, 
 	long long int ys;
 	int seqlen;
 }reldata;//<-releavant data
@@ -683,7 +685,7 @@ void printmap(FILE *fp,std::map<size_t,std::vector<reldata> > &mymap){
 		fprintf(fp,"key:%lu\n",it->first);
 		std::vector<reldata> &rd=it->second;
 		for(int i=0;i<rd.size();i++)
-			fprintf(fp,"\tval: xs:%d ys:%d\n",rd[i].xs,rd[i].ys);
+			fprintf(fp,"\tval: xs:%lld ys:%lld\n",rd[i].xs,rd[i].ys);
 	}
 #endif
 }
@@ -1042,7 +1044,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 			"    Cluster duplicates: %lu\n"
 			"    PCR duplicates: %lu\n"
 			"%lu\t%lu\t%f\n"
-			,nproc,nprocfilt, totaldups,clustdups,pcrdups,purecount,CMA);
+		,nproc,nprocfilt, totaldups,clustdups,pcrdups,purecount,CMA);// <- only 7 pars, but expects8
 
 
 	//fprintf(fp,
@@ -1069,7 +1071,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 			"#\tCumulative moving average:\n"
 			"CMA\t%lu\n"
 			"#\t%f\n"
-			,nproc,nprocfilt,totaldups,clustdups,pcrdups,purecount,CMA);
+		,nproc,nprocfilt,totaldups,clustdups,pcrdups,purecount,CMA);//mismatch
 
 	if (aux_stats){
 		//histogram mean
