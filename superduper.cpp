@@ -23,6 +23,7 @@
 //check bam output files
 //multiple libs
 //soft clipping is not being taken into account
+//is reference really needed for cram files
 
 size_t *histogram = NULL;
 size_t histogram_l = 4096;
