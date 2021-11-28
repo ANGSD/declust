@@ -19,12 +19,6 @@
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #endif
 
-//TODO
-//check bam output files
-//multiple libs
-//soft clipping is not being taken into account
-//is reference really needed for cram files
-
 size_t *histogram = NULL;
 size_t histogram_l = 4096;
 std::map<int,int> len_hist;
@@ -63,6 +57,8 @@ typedef struct
  * == sequence complexity estimation ==
  * ====================================
  *
+ *	calculation method adapted from fastp => https://github.com/OpenGene/fastp/blob/424900e376a02033a32b623bc5c836897f6b7e5a/src/filter.cpp#L67
+ *
  * (no of bases that are different from the next base) / (total number of comparisons)
  *		|__ read[basei] != read[basei+1]
  *
@@ -71,7 +67,6 @@ typedef struct
  *  1+1+0
  *  = 2/3
  *
- *	adapted from fastp => https://github.com/OpenGene/fastp/blob/424900e376a02033a32b623bc5c836897f6b7e5a/src/filter.cpp#L67
  */
 r_aux get_aux_stats(r_aux raux, uint8_t *qseq, int rLen, int aux_dostat){
 	// uint8_t coding:
@@ -129,11 +124,11 @@ r_aux get_aux_stats(r_aux raux, uint8_t *qseq, int rLen, int aux_dostat){
 
 
 void getTileInfo(char *tileId, unsigned short int *surf, unsigned short int *swath, unsigned short int *tile) {
-  //tsk consider strtok or sscanf. std::string is slow
-  std::string str(tileId);
-  *surf = std::stoi(str.substr(0,1));
-  *swath = std::stoi(str.substr(1,1));
-  *tile = std::stoi(str.substr(2,2));
+	//tsk consider strtok or sscanf. std::string is slow
+	std::string str(tileId);
+	*surf = std::stoi(str.substr(0,1));
+	*swath = std::stoi(str.substr(1,1));
+	*tile = std::stoi(str.substr(2,2));
 }
 
 void tsktsk(){
@@ -750,6 +745,7 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
 
 int usage(FILE *fp, int is_long_help)
 {
+	//todo ideally decrease the number of params
 	fprintf(fp,
 			"\n"
 			"Usage: ./superduper [options] <in.bam>|<in.sam>|<in.cram> \n"
@@ -1045,7 +1041,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 			"    Cluster duplicates: %lu\n"
 			"    PCR duplicates: %lu\n"
 			"%lu\t%lu\t%f\n"
-		,nproc,nprocfilt, totaldups,clustdups,pcrdups,purecount,CMA);// <- only 7 pars, but expects8
+			,nproc,nprocfilt, totaldups,clustdups,pcrdups,purecount,CMA);// <- only 7 pars, but expects8
 
 
 	//fprintf(fp,
@@ -1072,7 +1068,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 			"#\tCumulative moving average:\n"
 			"CMA\t%lu\n"
 			"#\t%f\n"
-		,nproc,nprocfilt,totaldups,clustdups,pcrdups,purecount,CMA);//mismatch
+			,nproc,nprocfilt,totaldups,clustdups,pcrdups,purecount,CMA);//mismatch
 
 	if (aux_stats){
 		//histogram mean
@@ -1116,12 +1112,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 
 int main(int argc, char **argv){
 	histogram = new size_t [histogram_l];
-	//TODO
-	//preseq manual says we should not have a count for 0
-	//for(int i=0;i<histogram_l;i++)
-	//histogram[i] = 0;
-	//for(int i=1;i<histogram_l;i++)
-	for(int i=0;i<histogram_l;i++)
+	for(int i=1;i<histogram_l;i++)
 		histogram[i] = 0;
 	double max_extrapolation = 1.0e10;
 	double step_size = 1e6;
@@ -1162,21 +1153,39 @@ int main(int argc, char **argv){
 		usage(stdout,0);
 		return 0;
 	}
-	static struct option lopts[] = {
-		{"add", 1, 0, 0},
-		{"append", 0, 0, 0},
-		{"delete", 1, 0, 0},
-		{"verbose", 0, 0, 0},
-		{"create", 1, 0, 'c'},
-		{"file", 1, 0, 0},
-		{NULL, 0, NULL, 0}
-	};
 
-	// x: means x has a param; is not a switch
-	while ((c = getopt_long(argc, argv,
-					"bCo:T:p:@:X:G:l:L:q:m0wWe:s:n:c:x:D:r:a:H:v",
-					lopts, NULL)) >= 0) {
+
+	static int help_flag;
+
+	while (1)
+	{
+		static struct option lopts[] = {
+			//{"verbose", 0, 0, 'v'},
+			//{"verbose", 0, &v, 1},
+			{"ref", 1, 0, 'T'},
+			{"out", 1, 0, 'o'},
+			{"help", 0, &help_flag, 1},
+			{NULL, 0, NULL, 0}
+			//{0, 0, 0, 0}
+		};
+
+		int opt_index=0;
+
+		c = getopt_long(argc, argv,
+				"bCo:T:p:@:X:G:l:L:q:m0wWe:s:n:c:x:D:r:a:H:vh",
+				lopts, &opt_index);
+
+		if (c == -1) break;
+
 		switch (c) {
+			case 0:
+				if (help_flag){   // '--help' appeared on command line
+					fprintf(stdout,"\n\nHELP_FLAG\n\n");
+					return usage(stdout,0);
+				}
+				//if opt sets a flag
+				if (lopts[opt_index].flag != 0)
+					break;
 			case 'b': out_mode[1] = 'b'; break;
 			case 'C': out_mode[1] = 'c'; break;
 			case 'T': refName = strdup(optarg); break;
@@ -1201,6 +1210,8 @@ int main(int argc, char **argv){
 			case 'D': DEFECTS = atoi(optarg); break;
 			case 'H': histfile = strdup(optarg); break;
 			case 'v': VERBOSE = 1; break;
+			case 'h': help_flag = 1;break;
+
 			case '?':
 					  if (optopt == '?') {  // '-?' appeared on command line
 						  return usage(stdout,0);
@@ -1222,6 +1233,10 @@ int main(int argc, char **argv){
 					  fprintf(stderr,"assinging: %s to fname:%s\n",optarg,fname);
 					  break;
 		}
+	}
+	if (help_flag){   // '--help' appeared on command line
+		fprintf(stdout,"\n\nHELP_FLAG\n\n");
+		return usage(stdout,0);
 	}
 	if(optind<argc)
 		fname = strdup(argv[optind]);
@@ -1292,11 +1307,12 @@ int main(int argc, char **argv){
 	//}
 
 	int last=0;
-	for(int i=0;i<histogram_l;i++)
+	for(int i=1;i<histogram_l;i++)
 		if(histogram[i])
 			last=i;
 	std::vector<double> to_preseq;
-	for(int i=0;i<=last;i++){
+	//for(int i=0;i<=last;i++){
+	for(int i=1;i<=last;i++){
 		fprintf(fphist,"%d\t%lu\n",i,histogram[i]);
 		//fprintf(stderr,"\n\nHISTOGRAM:\n%d\t%lu\n",i,histogram[i]);
 		to_preseq.push_back(histogram[i]);

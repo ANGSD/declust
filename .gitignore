@@ -2,3 +2,5 @@
 *o
 superduper
 tests/*log
+tests/*.test.*
+*.swp
