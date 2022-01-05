@@ -3,15 +3,15 @@
 ## Installation
 
 ```bash
-git clone https://github.com/ANGSD/superduper.git
-cd superduper
+git clone https://github.com/ANGSD/decluster.git
+cd decluster
 make
 ```
 
 ## Usage
 
 ```
-./superduper [options] <in.bam>|<in.sam>|<in.cram> 
+./decluster [options] <in.bam>|<in.sam>|<in.cram> 
 
 Options:
   -b       Output BAM

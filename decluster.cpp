@@ -748,7 +748,7 @@ int usage(FILE *fp, int is_long_help)
 	//todo ideally decrease the number of params
 	fprintf(fp,
 			"\n"
-			"Usage: ./superduper [options] <in.bam>|<in.sam>|<in.cram> \n"
+			"Usage: ./decluster [options] <in.bam>|<in.sam>|<in.cram> \n"
 			"\n"
 			"Options:\n"
 			// output options
@@ -801,7 +801,7 @@ int usage(FILE *fp, int is_long_help)
 			"   2) file without any cluster duplicates, but including other kinds of duplicates\n"
 			"\n"
 			"  Example: \n"
-			"\t ./superduper input.bam -o outfiles -p 5000\n"
+			"\t ./decluster input.bam -o outfiles -p 5000\n"
 			"\n"
 			"  Details:\n"
 			"  It loops  over input files, and reads with identical positions\n"
@@ -1217,13 +1217,13 @@ int main(int argc, char **argv){
 						  return usage(stdout,0);
 					  } else {
 						  if (optopt) { // Bad short option
-							  fprintf(stdout,"./superduper invalid option -- '%c'\n", optopt);
+							  fprintf(stdout,"./decluster invalid option -- '%c'\n", optopt);
 						  } else { // Bad long option
 							  // Do our best.  There is no good solution to finding
 							  // out what the bad option was.
 							  // See, e.g. https://stackoverflow.com/questions/2723888/where-does-getopt-long-store-an-unrecognized-option
 							  if (optind > 0 && strncmp(argv[optind - 1], "--", 2) == 0) {
-								  fprintf(stdout,"./superduper unrecognised option '%s'\n",argv[optind - 1]);
+								  fprintf(stdout,"./decluster unrecognised option '%s'\n",argv[optind - 1]);
 							  }
 						  }
 						  return 0;//usage(stderr, 0);
@@ -1270,8 +1270,8 @@ int main(int argc, char **argv){
 		return 1;
 	}  
 
-	fprintf(stderr,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d complexity_thr:%d gc_thr:%d min_readlength:%d max_readlength:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only, complexity_thr, gc_thr, min_rLen, max_rLen);
-	fprintf(fp,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d complexity_thr:%d gc_thr:%d min_readlength:%d, max_readlength:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only,complexity_thr, gc_thr,min_rLen, max_rLen);
+	fprintf(stderr,"./decluster refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d complexity_thr:%d gc_thr:%d min_readlength:%d max_readlength:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only, complexity_thr, gc_thr, min_rLen, max_rLen);
+	fprintf(fp,"./decluster refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d complexity_thr:%d gc_thr:%d min_readlength:%d, max_readlength:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only,complexity_thr, gc_thr,min_rLen, max_rLen);
 
 	//TODO why?
 #ifdef __WITH_GSL__

@@ -9,7 +9,7 @@ CSRC = $(wildcard *.c)
 CXXSRC = $(wildcard *.cpp)
 OBJ = $(CSRC:.c=.o) $(CXXSRC:.cpp=.o)
 
-all: superduper
+all: decluster
 
 
 # Adjust $(HTSSRC) to point to your top-level htslib directory
@@ -33,8 +33,8 @@ ifdef HTSSRC
 	$(CXX) -c  $(CXXFLAGS)  -I$(HTS_INCDIR) $*.cpp
 	$(CXX) -MM $(CXXFLAGS)  -I$(HTS_INCDIR) $*.cpp >$*.d
 
-superduper: $(OBJ)
-	$(CXX) $(FLAGS)  -o superduper *.o $(HTS_LIBDIR) -lz -llzma -lbz2 -lpthread -lcurl -lgsl 
+decluster: $(OBJ)
+	$(CXX) $(FLAGS)  -o decluster *.o $(HTS_LIBDIR) -lz -llzma -lbz2 -lpthread -lcurl -lgsl 
 else
 %.o: %.c
 	$(CC) -c  $(CFLAGS)  $*.c
@@ -44,12 +44,12 @@ else
 	$(CXX) -c  $(CXXFLAGS)  $*.cpp
 	$(CXX) -MM $(CXXFLAGS)  $*.cpp >$*.d
 
-superduper: $(OBJ)
-	$(CXX) $(FLAGS)  -o superduper *.o -lz -llzma -lbz2 -lpthread -lcurl -lhts -lgsl
+decluster: $(OBJ)
+	$(CXX) $(FLAGS)  -o decluster *.o -lz -llzma -lbz2 -lpthread -lcurl -lhts -lgsl
 endif
 
 clean:	
-	rm  -f superduper *.o *.d
+	rm  -f decluster *.o *.d
 
 
 testbams := $(wildcard tests/*bam)
@@ -57,7 +57,7 @@ testbams := $(wildcard tests/*bam)
 #TODO add dupstat checks
 test: $(testbams)
 	for bam in $(testbams); do \
-		./superduper -0 -w $${bam} -o $${bam%.bam}.test 2> $${bam%.bam}.log; \
+		./decluster -0 -w $${bam} -o $${bam%.bam}.test 2> $${bam%.bam}.log; \
 		diff $${bam%.bam}.test.hist.txt $${bam%.bam}.expected.hist.txt; \
 		bash -c "diff <(sed 1d $${bam%.bam}.test.dupstat.txt) <(sed 1d $${bam%.bam}.expected.dupstat.txt)"; \
 	done
