@@ -277,10 +277,8 @@ aMap char2int;
 typedef struct{
 	bam1_t *d;
 	//TODO
-	//unsigned long int xs;
-	//unsigned long int ys;
-	long long int xs;//long long?, 
-	long long int ys;
+	int64_t xs;
+	int64_t ys;
 	int seqlen;
 }reldata;//<-releavant data
 
@@ -308,7 +306,7 @@ void print_clusters(std::vector<std::vector<int> > &clusters){
 	}
 }
 
-void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1_t *b,bam_hdr_t *hdr){
+void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1_t *b,bam_hdr_t *hdr, char *coordtype){
 	reldata point;
 	point.d=b;
 
@@ -329,10 +327,17 @@ void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1
 	int ylen=36059;
 	unsigned short int nTiles=78;
 
-	//point.xs = atoi(strtok(NULL,"\n\t:"));
-	//point.ys = atoi(strtok(NULL,"\n\t:"));
-	point.xs = globalX(atoi(strtok(NULL,"\n\t:")),xlen,swath);
-	point.ys = globalY(atoi(strtok(NULL,"\n\t:")),ylen,nTiles,tile);
+
+	if( strcmp(coordtype,"g") == 0 ){ 
+		point.xs = globalX(atoi(strtok(NULL,"\n\t:")),xlen,swath);
+		point.ys = globalY(atoi(strtok(NULL,"\n\t:")),ylen,nTiles,tile);
+	}else if (strcmp(coordtype,"l") == 0){
+		point.xs = atoi(strtok(NULL,"\n\t:"));
+		point.ys = atoi(strtok(NULL,"\n\t:"));
+	}else{
+		fprintf(stderr,"\nUnknown coordinate type %s; will exit\n",coordtype);
+		exit(0);
+	}
 	point.seqlen = b->core.l_qseq;
 
 	int libid = 0;
@@ -675,7 +680,7 @@ void printmap(FILE *fp,std::map<size_t,std::vector<reldata> > &mymap){
 #endif
 }
 
-void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupFP){
+void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupFP, char *coordtype){
 
 	//fprintf(stderr,"do_magic queue->l:%d queue->m:%d chr:%d pos:%d\n",q->l,q->m,q->d[0]->core.tid,q->d[0]->core.pos);
 	//fprintf(stderr,"@@@@@@info\t%d\t%d\n",q->d[0]->core.pos+1,q->l);
@@ -696,9 +701,9 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
 			continue;
 		}
 		if(bam_is_rev(b))
-			plugin(mymapR,b,hdr);
+			plugin(mymapR,b,hdr,coordtype);
 		else
-			plugin(mymapF,b,hdr);
+			plugin(mymapF,b,hdr,coordtype);
 	}
 	std::vector<size_t> counter;
 	plugout(mymapF,hdr,fp,fp2,counter);
@@ -819,7 +824,7 @@ int usage(FILE *fp, int is_long_help)
 	return 0;
 }
 
-void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopreseq,int stats_only,int nthreads,int mapped_only,int se_only,int mapq,char *onam3,FILE *fp, int complexity_thr, int gc_thr, int aux_stats, int min_rLen, int max_rLen){
+void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopreseq,int stats_only,int nthreads,int mapped_only,int se_only,int mapq,char *onam3,FILE *fp, int complexity_thr, int gc_thr, int aux_stats, int min_rLen, int max_rLen, char *coordtype){
 
 	htsThreadPool p = {NULL, 0};
 	samFile *in=NULL;
@@ -971,7 +976,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 
 		if(queue->l>1 &&(queue->d[0]->core.tid!=b->core.tid ||(queue->d[0]->core.pos!=b->core.pos))){
 			//fprintf(stderr,"calling do_magic\n");
-			do_magic(queue,hdr,out,out2,nodupFP);
+			do_magic(queue,hdr,out,out2,nodupFP,coordtype);
 			queue->l =0;
 		}
 
@@ -991,7 +996,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 		CMA = (queue->d[0]->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
 	}else{
 		//fprintf(stderr,"calling do_magic\n");
-		do_magic(queue,hdr,out,out2,nodupFP);
+		do_magic(queue,hdr,out,out2,nodupFP,coordtype);
 	}
 	queue->l=0;
 	if(out)
@@ -1029,17 +1034,10 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 			"    Total duplicates: %lu\n"
 			"    Cluster duplicates: %lu\n"
 			"    PCR duplicates: %lu\n"
-			"%lu\t%lu\t%f\n"
-			,nproc,nprocfilt, totaldups,clustdups,pcrdups,purecount,CMA);// <- only 7 pars, but expects8
+			"%lu\t%f\n"
+			,nproc,nprocfilt, totaldups,clustdups,pcrdups,purecount,CMA);
 
 
-	//fprintf(fp,
-	//"#    Reads processed: %lu\n"
-	//"#    Total duplicates: %lu\n"
-	//"#    Cluster duplicates: %lu\n"
-	//"#    PCR duplicates: %lu\n"
-	//"%lu\t%lu\t%f\n"
-	//,nproc,totaldups,clustdups,pcrdups,purecount,CMA);
 
 	fprintf(fp,
 			"#\tReads processed:\n"
@@ -1055,9 +1053,8 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 			"#\tPure count:\n"
 			"PRC\t%lu\n"
 			"#\tCumulative moving average:\n"
-			"CMA\t%lu\n"
-			"#\t%f\n"
-			,nproc,nprocfilt,totaldups,clustdups,pcrdups,purecount,CMA);//mismatch
+			"CMA\t%f\n"
+			,nproc,nprocfilt,totaldups,clustdups,pcrdups,purecount,CMA);
 
 	if (aux_stats){
 		//histogram mean
@@ -1117,6 +1114,9 @@ int main(int argc, char **argv){
 
 	char *fname,*refName;
 
+	char *coordtype = (char *)"g";
+
+
 	FILE *fp = NULL;
 	FILE *fphist = NULL;
 	FILE *fptable = NULL;
@@ -1145,6 +1145,7 @@ int main(int argc, char **argv){
 
 
 	static int help_flag;
+	static int conf_flag;
 
 	while (1)
 	{
@@ -1154,6 +1155,8 @@ int main(int argc, char **argv){
 			{"ref", 1, 0, 'T'},
 			{"out", 1, 0, 'o'},
 			{"help", 0, &help_flag, 1},
+			{"conf", 0, &conf_flag, 1},
+			{"coord", 1, 0, 'd'},
 			{NULL, 0, NULL, 0}
 			//{0, 0, 0, 0}
 		};
@@ -1161,7 +1164,7 @@ int main(int argc, char **argv){
 		int opt_index=0;
 
 		c = getopt_long(argc, argv,
-				"bCo:T:p:@:X:G:l:L:q:m0wWe:s:n:c:x:D:r:a:H:vh",
+				"bCo:d:T:p:@:X:G:l:L:q:m0wWe:s:n:c:x:D:r:a:H:vh",
 				lopts, &opt_index);
 
 		if (c == -1) break;
@@ -1172,11 +1175,16 @@ int main(int argc, char **argv){
 					fprintf(stdout,"\n\nHELP_FLAG\n\n");
 					return usage(stdout,0);
 				}
+				if (conf_flag){
+					fprintf(stdout,"\n\nCONF_FLAG\n\n");
+					return usage(stdout,0);
+				}
 				//if opt sets a flag
 				if (lopts[opt_index].flag != 0)
 					break;
 			case 'b': out_mode[1] = 'b'; break;
 			case 'C': out_mode[1] = 'c'; break;
+			case 'd': coordtype = strdup(optarg); break;
 			case 'T': refName = strdup(optarg); break;
 			case 'o': fn_out = strdup(optarg); break;
 			case 'p': pxdist = atof(optarg); break;
@@ -1273,7 +1281,7 @@ int main(int argc, char **argv){
 
 
 	if(fname){
-		parse_sequencingdata(fn_out,refName,fname,stats_nopreseq,stats_only,nthreads,mapped_only,se_only,mapq,onam3,fp,complexity_thr, gc_thr,aux_stats, min_rLen, max_rLen);
+		parse_sequencingdata(fn_out,refName,fname,stats_nopreseq,stats_only,nthreads,mapped_only,se_only,mapq,onam3,fp,complexity_thr, gc_thr,aux_stats, min_rLen, max_rLen,coordtype);
 
 	}
 	if(histfile){

@@ -14,5 +14,4 @@ PCRD	4
 #	Pure count:
 PRC	1
 #	Cumulative moving average:
-CMA	0
-#	35.000000
+CMA	35.000000
