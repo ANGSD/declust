@@ -1,4 +1,4 @@
-./superduper refName:(null) fname:test3.bam out_mode:wb pxdist:12000.000000 nthread:1 mapped_only:0 mapq:-1
+./decluster refName:(null) fname:test3.bam out_mode:wb pxdist:12000.000000 nthread:1 mapped_only:0 mapq:-1
 max_extrap:10000000000.000000 step:1000000.000000 boot:100 c_lev:0.950000 max_term:100 defect:0 verbose:0 seed:0 se_only:1 complexity_thr:0 gc_thr:0 min_readlength:0, max_readlength:0
 	-> Using std=c++11 library functions
 #	Reads processed:

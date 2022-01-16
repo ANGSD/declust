@@ -11,9 +11,7 @@
 #include <cmath>
 #include <getopt.h>
 #include <ctime>
-#include <string.h>
 #include <math.h>
-#include <string>
 
 #ifndef MIN
 #define MIN(a,b) ((a)<(b)?(a):(b))
@@ -123,13 +121,6 @@ r_aux get_aux_stats(r_aux raux, uint8_t *qseq, int rLen, int aux_dostat){
 }
 
 
-void getTileInfo(char *tileId, unsigned short int *surf, unsigned short int *swath, unsigned short int *tile) {
-	//tsk consider strtok or sscanf. std::string is slow
-	std::string str(tileId);
-	*surf = std::stoi(str.substr(0,1));
-	*swath = std::stoi(str.substr(1,1));
-	*tile = std::stoi(str.substr(2,2));
-}
 
 void tsktsk(){
 	fprintf(stderr,"\t-> Incrementing histogram of duplicates from:%lu to  %lu\n",histogram_l,2*histogram_l);
@@ -327,19 +318,17 @@ void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1
 	strtok(NULL,"\n\t:");//runname
 	strtok(NULL,"\n\t:");//flowcell
 	unsigned short int lane = atoi(strtok(NULL,"\n\t:"));
-	//int tile = atoi(strtok(NULL,"\n\t:"));
 
-	unsigned short int surf;
-	unsigned short int swath;
-	unsigned short int tile;
-	getTileInfo(strtok(NULL,"\n\t:"), &surf, &swath, &tile);
+
+	int surf, swath,tile;
+	sscanf(strtok(NULL,"\n\t:"), "%1d%1d%2d", &surf, &swath, &tile);
+	//fprintf(stderr,"\n\n%d %d %d\n\n",surf, swath, tile);
 
 	// novaseq specific values, inferred from data
 	int xlen=32103;
 	int ylen=36059;
 	unsigned short int nTiles=78;
 
-	//printf("\n\n%d %d %d\n\n",surf,swath,tile);
 	//point.xs = atoi(strtok(NULL,"\n\t:"));
 	//point.ys = atoi(strtok(NULL,"\n\t:"));
 	point.xs = globalX(atoi(strtok(NULL,"\n\t:")),xlen,swath);
