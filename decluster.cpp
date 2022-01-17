@@ -311,7 +311,7 @@ void print_clusters(std::vector<std::vector<int> > &clusters){
 	}
 }
 
-void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1_t *b,bam_hdr_t *hdr, char *coordtype){
+void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1_t *b,bam_hdr_t *hdr, char *coordtype, int xLength, int yLength, int nTiles){
 	reldata point;
 	point.d=b;
 
@@ -327,15 +327,11 @@ void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1
 	sscanf(strtok(NULL,"\n\t:"), "%1d%1d%2d", &surf, &swath, &tile);
 	//fprintf(stderr,"\n\n%d %d %d\n\n",surf, swath, tile);
 
-	// novaseq specific values, inferred from data
-	int xlen=32103;
-	int ylen=36059;
-	unsigned short int nTiles=78;
 
 
 	if( ! strcmp(coordtype,"g") || ! strcmp(coordtype,"global") ){ 
-		point.xs = globalX(atoi(strtok(NULL,"\n\t:")),xlen,swath);
-		point.ys = globalY(atoi(strtok(NULL,"\n\t:")),ylen,nTiles,tile);
+		point.xs = globalX(atoi(strtok(NULL,"\n\t:")),xLength,swath);
+		point.ys = globalY(atoi(strtok(NULL,"\n\t:")),yLength,nTiles,tile);
 	}else if (! strcmp(coordtype,"l") || ! strcmp(coordtype,"local") ){
 		point.xs = atoi(strtok(NULL,"\n\t:"));
 		point.ys = atoi(strtok(NULL,"\n\t:"));
@@ -685,7 +681,7 @@ void printmap(FILE *fp,std::map<size_t,std::vector<reldata> > &mymap){
 #endif
 }
 
-void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupFP, char *coordtype){
+void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupFP, char *coordtype, int xLength, int yLength, int nTiles){
 
 	//fprintf(stderr,"do_magic queue->l:%d queue->m:%d chr:%d pos:%d\n",q->l,q->m,q->d[0]->core.tid,q->d[0]->core.pos);
 	//fprintf(stderr,"@@@@@@info\t%d\t%d\n",q->d[0]->core.pos+1,q->l);
@@ -706,9 +702,9 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
 			continue;
 		}
 		if(bam_is_rev(b))
-			plugin(mymapR,b,hdr,coordtype);
+			plugin(mymapR,b,hdr,coordtype,xLength,yLength,nTiles);
 		else
-			plugin(mymapF,b,hdr,coordtype);
+			plugin(mymapF,b,hdr,coordtype,xLength,yLength,nTiles);
 	}
 	std::vector<size_t> counter;
 	plugout(mymapF,hdr,fp,fp2,counter);
@@ -902,7 +898,7 @@ void parse_platformconfig(char *fname){
 }
 
 
-void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopreseq,int stats_only,int nthreads,int mapped_only,int se_only,int mapq,char *onam3,FILE *fp, int complexity_thr, int gc_thr, int aux_stats, int min_rLen, int max_rLen, char *coordtype){
+void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopreseq,int stats_only,int nthreads,int mapped_only,int se_only,int mapq,char *onam3,FILE *fp, int complexity_thr, int gc_thr, int aux_stats, int min_rLen, int max_rLen, char *coordtype, int xLength, int yLength, int nTiles){
 
 	htsThreadPool p = {NULL, 0};
 	samFile *in=NULL;
@@ -1054,7 +1050,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 
 		if(queue->l>1 &&(queue->d[0]->core.tid!=b->core.tid ||(queue->d[0]->core.pos!=b->core.pos))){
 			//fprintf(stderr,"calling do_magic\n");
-			do_magic(queue,hdr,out,out2,nodupFP,coordtype);
+			do_magic(queue,hdr,out,out2,nodupFP,coordtype, xLength, yLength, nTiles);
 			queue->l =0;
 		}
 
@@ -1074,7 +1070,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 		CMA = (queue->d[0]->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
 	}else{
 		//fprintf(stderr,"calling do_magic\n");
-		do_magic(queue,hdr,out,out2,nodupFP,coordtype);
+		do_magic(queue,hdr,out,out2,nodupFP,coordtype,xLength, yLength, nTiles);
 	}
 	queue->l=0;
 	if(out)
@@ -1225,6 +1221,17 @@ int main(int argc, char **argv){
 	static int help_flag;
 	static int conf_flag;
 
+
+	// novaseq specific values, inferred from data
+	//int *xLength= (int*) 32103;
+	//int *yLength= (int*) 36059;
+	//int *nTiles= (int*) 78;
+
+	int xLength= 32103;
+	int yLength= 36059;
+	int nTiles= 78;
+
+
 	while (1)
 	{
 		static struct option lopts[] = {
@@ -1234,7 +1241,10 @@ int main(int argc, char **argv){
 			{"out", 1, 0, 'o'},
 			{"help", 0, &help_flag, 1},
 			{"getConf", 0, &conf_flag, 1},
-			{"coord", 1, 0, 'd'},
+			{"coordType", 1, 0, 'd'},
+			{"xLength", 1, 0, 'A'},
+			{"yLength", 1, 0, 'B'},
+			{"nTiles", 1, 0, 'E'},
 			{NULL, 0, NULL, 0}
 			//{0, 0, 0, 0}
 		};
@@ -1242,11 +1252,12 @@ int main(int argc, char **argv){
 		int opt_index=0;
 
 		c = getopt_long(argc, argv,
-				"bCo:d:T:p:@:X:G:l:L:q:m0wWe:s:n:c:x:D:r:a:H:vh",
+				"bCo:d:A:B:E:T:p:@:X:G:l:L:q:m0wWe:s:n:c:x:D:r:a:H:vh",
 				lopts, &opt_index);
 
 		if (c == -1) break;
-
+		
+		
 		switch (c) {
 			case 0:
 				if (help_flag){   // '--help' appeared on command line
@@ -1269,9 +1280,14 @@ int main(int argc, char **argv){
 				//if opt sets a flag
 				if (lopts[opt_index].flag != 0)
 					break;
+
+
 			case 'b': out_mode[1] = 'b'; break;
 			case 'C': out_mode[1] = 'c'; break;
 			case 'd': coordtype = strdup(optarg); break;
+			case 'A': xLength = atoi(optarg); break;
+			case 'B': yLength = atoi(optarg); break;
+			case 'E': nTiles = atoi(optarg); break;
 			case 'T': refName = strdup(optarg); break;
 			case 'o': fn_out = strdup(optarg); break;
 			case 'p': pxdist = atof(optarg); break;
@@ -1355,8 +1371,8 @@ int main(int argc, char **argv){
 		return 1;
 	}  
 
-	fprintf(stderr,"./decluster refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d complexity_thr:%d gc_thr:%d min_readlength:%d max_readlength:%d coordinateType:%s\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only, complexity_thr, gc_thr, min_rLen, max_rLen,coordtype);
-	fprintf(fp,"./decluster refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d complexity_thr:%d gc_thr:%d min_readlength:%d, max_readlength:%d coordinateType:%s\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only,complexity_thr, gc_thr,min_rLen, max_rLen, coordtype);
+	fprintf(stderr,"./decluster refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d complexity_thr:%d gc_thr:%d min_readlength:%d max_readlength:%d coordinateType:%s xLength:%d yLength:%d nTiles:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only, complexity_thr, gc_thr, min_rLen, max_rLen,coordtype,xLength,yLength, nTiles);
+	fprintf(fp,"./decluster refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d complexity_thr:%d gc_thr:%d min_readlength:%d, max_readlength:%d coordinateType:%s xLength:%d yLength:%d nTiles%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only,complexity_thr, gc_thr,min_rLen, max_rLen, coordtype,xLength,yLength, nTiles);
 
 	//TODO why?
 #ifdef __WITH_GSL__
@@ -1369,7 +1385,7 @@ int main(int argc, char **argv){
 
 
 	if(fname){
-		parse_sequencingdata(fn_out,refName,fname,stats_nopreseq,stats_only,nthreads,mapped_only,se_only,mapq,onam3,fp,complexity_thr, gc_thr,aux_stats, min_rLen, max_rLen,coordtype);
+		parse_sequencingdata(fn_out,refName,fname,stats_nopreseq,stats_only,nthreads,mapped_only,se_only,mapq,onam3,fp,complexity_thr, gc_thr,aux_stats, min_rLen, max_rLen,coordtype, xLength, yLength, nTiles);
 
 	}
 	if(histfile){
