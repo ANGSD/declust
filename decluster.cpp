@@ -11,13 +11,16 @@
 #include <cmath>
 #include <getopt.h>
 #include <ctime>
-#include <string.h>
 #include <math.h>
-#include <string>
 
 #ifndef MIN
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #endif
+
+#ifndef MAX 
+#define MAX(a,b) ((a)>(b)?(a):(b))
+#endif
+
 
 size_t *histogram = NULL;
 size_t histogram_l = 4096;
@@ -123,13 +126,6 @@ r_aux get_aux_stats(r_aux raux, uint8_t *qseq, int rLen, int aux_dostat){
 }
 
 
-void getTileInfo(char *tileId, unsigned short int *surf, unsigned short int *swath, unsigned short int *tile) {
-	//tsk consider strtok or sscanf. std::string is slow
-	std::string str(tileId);
-	*surf = std::stoi(str.substr(0,1));
-	*swath = std::stoi(str.substr(1,1));
-	*tile = std::stoi(str.substr(2,2));
-}
 
 void tsktsk(){
 	fprintf(stderr,"\t-> Incrementing histogram of duplicates from:%lu to  %lu\n",histogram_l,2*histogram_l);
@@ -286,10 +282,8 @@ aMap char2int;
 typedef struct{
 	bam1_t *d;
 	//TODO
-	//unsigned long int xs;
-	//unsigned long int ys;
-	long long int xs;//long long?, 
-	long long int ys;
+	int64_t xs;
+	int64_t ys;
 	int seqlen;
 }reldata;//<-releavant data
 
@@ -317,7 +311,7 @@ void print_clusters(std::vector<std::vector<int> > &clusters){
 	}
 }
 
-void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1_t *b,bam_hdr_t *hdr){
+void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1_t *b,bam_hdr_t *hdr, char *coordtype, int xLength, int yLength, int nTiles){
 	reldata point;
 	point.d=b;
 
@@ -327,23 +321,24 @@ void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1
 	strtok(NULL,"\n\t:");//runname
 	strtok(NULL,"\n\t:");//flowcell
 	unsigned short int lane = atoi(strtok(NULL,"\n\t:"));
-	//int tile = atoi(strtok(NULL,"\n\t:"));
 
-	unsigned short int surf;
-	unsigned short int swath;
-	unsigned short int tile;
-	getTileInfo(strtok(NULL,"\n\t:"), &surf, &swath, &tile);
 
-	// novaseq specific values, inferred from data
-	int xlen=32103;
-	int ylen=36059;
-	unsigned short int nTiles=78;
+	int surf, swath,tile;
+	sscanf(strtok(NULL,"\n\t:"), "%1d%1d%2d", &surf, &swath, &tile);
+	//fprintf(stderr,"\n\n%d %d %d\n\n",surf, swath, tile);
 
-	//printf("\n\n%d %d %d\n\n",surf,swath,tile);
-	//point.xs = atoi(strtok(NULL,"\n\t:"));
-	//point.ys = atoi(strtok(NULL,"\n\t:"));
-	point.xs = globalX(atoi(strtok(NULL,"\n\t:")),xlen,swath);
-	point.ys = globalY(atoi(strtok(NULL,"\n\t:")),ylen,nTiles,tile);
+
+
+	if( ! strcmp(coordtype,"g") || ! strcmp(coordtype,"global") ){ 
+		point.xs = globalX(atoi(strtok(NULL,"\n\t:")),xLength,swath);
+		point.ys = globalY(atoi(strtok(NULL,"\n\t:")),yLength,nTiles,tile);
+	}else if (! strcmp(coordtype,"l") || ! strcmp(coordtype,"local") ){
+		point.xs = atoi(strtok(NULL,"\n\t:"));
+		point.ys = atoi(strtok(NULL,"\n\t:"));
+	}else{
+		fprintf(stderr,"\nUnknown coordinate type %s; will exit\n",coordtype);
+		exit(0);
+	}
 	point.seqlen = b->core.l_qseq;
 
 	int libid = 0;
@@ -686,7 +681,7 @@ void printmap(FILE *fp,std::map<size_t,std::vector<reldata> > &mymap){
 #endif
 }
 
-void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupFP){
+void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupFP, char *coordtype, int xLength, int yLength, int nTiles){
 
 	//fprintf(stderr,"do_magic queue->l:%d queue->m:%d chr:%d pos:%d\n",q->l,q->m,q->d[0]->core.tid,q->d[0]->core.pos);
 	//fprintf(stderr,"@@@@@@info\t%d\t%d\n",q->d[0]->core.pos+1,q->l);
@@ -707,9 +702,9 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
 			continue;
 		}
 		if(bam_is_rev(b))
-			plugin(mymapR,b,hdr);
+			plugin(mymapR,b,hdr,coordtype,xLength,yLength,nTiles);
 		else
-			plugin(mymapF,b,hdr);
+			plugin(mymapF,b,hdr,coordtype,xLength,yLength,nTiles);
 	}
 	std::vector<size_t> counter;
 	plugout(mymapF,hdr,fp,fp2,counter);
@@ -748,7 +743,7 @@ int usage(FILE *fp, int is_long_help)
 	//todo ideally decrease the number of params
 	fprintf(fp,
 			"\n"
-			"Usage: ./superduper [options] <in.bam>|<in.sam>|<in.cram> \n"
+			"Usage: ./decluster [options] <in.bam>|<in.sam>|<in.cram> \n"
 			"\n"
 			"Options:\n"
 			// output options
@@ -773,7 +768,6 @@ int usage(FILE *fp, int is_long_help)
 			"					Example: To extract sequence complexity distribution, use:\n"
 			"						`grep ^SCD out.dupstat.txt | cut -f 2-`\n"
 			"  -v       Verbose mode\n"
-			//TODO what does verbose do
 			"  -a       Only use the single end part of the bam (default: 1 (enabled), use -a 0 to disable)\n"
 			"  -X INT	Sequence complexity filter, discard read if complexity<INT (0-100, default: off)\n" 
 			//TODO max,min,range
@@ -801,7 +795,7 @@ int usage(FILE *fp, int is_long_help)
 			"   2) file without any cluster duplicates, but including other kinds of duplicates\n"
 			"\n"
 			"  Example: \n"
-			"\t ./superduper input.bam -o outfiles -p 5000\n"
+			"\t ./decluster input.bam -o outfiles -p 5000\n"
 			"\n"
 			"  Details:\n"
 			"  It loops  over input files, and reads with identical positions\n"
@@ -819,18 +813,92 @@ int usage(FILE *fp, int is_long_help)
 			"\n"
 			"  For more details, see Illumina NovaSeq 6000 Sequencing System Guide \n"
 			"  Document #1000000019358v14 Material #20023471\n"
-			"\n"
-			"\n\n"
-			"  Limitations(bugs):\n"
-			"  1) Does not use strand info\n"
-			"  2) Does not use the flag field (external duplicate level e.g flag 1024)\n"
-			"  3) Does not work with SAM files.\n"
-			"  4) Does not with with regions \n");
+			"\n\n");
 
 	return 0;
 }
 
-void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopreseq,int stats_only,int nthreads,int mapped_only,int se_only,int mapq,char *onam3,FILE *fp, int complexity_thr, int gc_thr, int aux_stats, int min_rLen, int max_rLen){
+
+void parse_platformconfig(char *fname){
+
+
+
+	samFile *in=NULL;
+
+	if((in=sam_open_format(fname,"r",dingding2))==NULL ){
+		fprintf(stderr,"[%s] nonexistant file: %s\n",__FUNCTION__,fname);
+		exit(0);
+	}
+
+
+	bam_hdr_t  *hdr = sam_hdr_read(in);
+
+	bam1_t *b = bam_init1();
+
+	int8_t maxswath=0;
+	int8_t maxtile=0;
+
+	uint32_t minx=100000;
+	uint32_t miny=100000;
+
+	uint32_t maxx=0;
+	uint32_t maxy=0;
+
+	int ret;
+	int refId=-1;
+	purecount=0;
+
+
+	while(((ret=sam_read1(in,hdr,b)))>0){
+
+
+		mystr = strncpy(mystr,bam_get_qname(b),2048);
+		strtok(mystr,"\n\t:");//machine
+		strtok(NULL,"\n\t:");//runname
+		strtok(NULL,"\n\t:");//flowcell
+		strtok(NULL,"\n\t:");//lane
+		//assuming swath tile counts are the same for all lanes
+		
+		int surf, swath,tile;
+		sscanf(strtok(NULL,"\n\t:"), "%1d%1d%2d", &surf, &swath, &tile);
+		maxswath=MAX(swath,maxswath);
+		maxtile=MAX(tile,maxtile);
+
+		int32_t xs = atoi(strtok(NULL,"\n\t:"));
+		int32_t ys = atoi(strtok(NULL,"\n\t:"));
+
+		minx=MIN(minx,xs);
+		maxx=MAX(maxx,xs);
+		miny=MIN(miny,ys);
+		maxy=MAX(maxy,ys);
+
+	}
+	
+
+	//assuming numbers start with 1; max observed value of tiles eq number of tiles
+	fprintf(stderr,
+			"\tMinimum x axis value observed: %d\n"
+			"\tMaximum x axis value observed: %d\n"
+			"\tMinimum y axis value observed: %d\n"
+			"\tMaximum y axis value observed: %d\n"
+			"\tEstimated length of x axis per tile: %d\n"
+			"\tEstimated length of y axis per tile: %d\n"
+			"\tNumber of swaths: %d\n"
+			"\tNumber of tiles: %d\n"
+			, minx, maxx, miny, maxy,maxx-minx, maxy-miny, maxswath,maxtile);
+		
+
+	delete [] mystr;
+	bam_destroy1(b);
+	hts_opt_free((hts_opt *)dingding2->specific);
+	free(dingding2);
+	free(fname);
+
+
+}
+
+
+void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopreseq,int stats_only,int nthreads,int mapped_only,int se_only,int mapq,char *onam3,FILE *fp, int complexity_thr, int gc_thr, int aux_stats, int min_rLen, int max_rLen, char *coordtype, int xLength, int yLength, int nTiles){
 
 	htsThreadPool p = {NULL, 0};
 	samFile *in=NULL;
@@ -982,7 +1050,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 
 		if(queue->l>1 &&(queue->d[0]->core.tid!=b->core.tid ||(queue->d[0]->core.pos!=b->core.pos))){
 			//fprintf(stderr,"calling do_magic\n");
-			do_magic(queue,hdr,out,out2,nodupFP);
+			do_magic(queue,hdr,out,out2,nodupFP,coordtype, xLength, yLength, nTiles);
 			queue->l =0;
 		}
 
@@ -1002,7 +1070,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 		CMA = (queue->d[0]->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
 	}else{
 		//fprintf(stderr,"calling do_magic\n");
-		do_magic(queue,hdr,out,out2,nodupFP);
+		do_magic(queue,hdr,out,out2,nodupFP,coordtype,xLength, yLength, nTiles);
 	}
 	queue->l=0;
 	if(out)
@@ -1040,17 +1108,10 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 			"    Total duplicates: %lu\n"
 			"    Cluster duplicates: %lu\n"
 			"    PCR duplicates: %lu\n"
-			"%lu\t%lu\t%f\n"
-			,nproc,nprocfilt, totaldups,clustdups,pcrdups,purecount,CMA);// <- only 7 pars, but expects8
+			"%lu\t%f\n"
+			,nproc,nprocfilt, totaldups,clustdups,pcrdups,purecount,CMA);
 
 
-	//fprintf(fp,
-	//"#    Reads processed: %lu\n"
-	//"#    Total duplicates: %lu\n"
-	//"#    Cluster duplicates: %lu\n"
-	//"#    PCR duplicates: %lu\n"
-	//"%lu\t%lu\t%f\n"
-	//,nproc,totaldups,clustdups,pcrdups,purecount,CMA);
 
 	fprintf(fp,
 			"#\tReads processed:\n"
@@ -1066,9 +1127,8 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 			"#\tPure count:\n"
 			"PRC\t%lu\n"
 			"#\tCumulative moving average:\n"
-			"CMA\t%lu\n"
-			"#\t%f\n"
-			,nproc,nprocfilt,totaldups,clustdups,pcrdups,purecount,CMA);//mismatch
+			"CMA\t%f\n"
+			,nproc,nprocfilt,totaldups,clustdups,pcrdups,purecount,CMA);
 
 	if (aux_stats){
 		//histogram mean
@@ -1128,6 +1188,9 @@ int main(int argc, char **argv){
 
 	char *fname,*refName;
 
+	char *coordtype = (char *)"g";
+
+
 	FILE *fp = NULL;
 	FILE *fphist = NULL;
 	FILE *fptable = NULL;
@@ -1156,6 +1219,18 @@ int main(int argc, char **argv){
 
 
 	static int help_flag;
+	static int conf_flag;
+
+
+	// novaseq specific values, inferred from data
+	//int *xLength= (int*) 32103;
+	//int *yLength= (int*) 36059;
+	//int *nTiles= (int*) 78;
+
+	int xLength= 32103;
+	int yLength= 36059;
+	int nTiles= 78;
+
 
 	while (1)
 	{
@@ -1165,6 +1240,11 @@ int main(int argc, char **argv){
 			{"ref", 1, 0, 'T'},
 			{"out", 1, 0, 'o'},
 			{"help", 0, &help_flag, 1},
+			{"getConf", 0, &conf_flag, 1},
+			{"coordType", 1, 0, 'd'},
+			{"xLength", 1, 0, 'A'},
+			{"yLength", 1, 0, 'B'},
+			{"nTiles", 1, 0, 'E'},
 			{NULL, 0, NULL, 0}
 			//{0, 0, 0, 0}
 		};
@@ -1172,22 +1252,42 @@ int main(int argc, char **argv){
 		int opt_index=0;
 
 		c = getopt_long(argc, argv,
-				"bCo:T:p:@:X:G:l:L:q:m0wWe:s:n:c:x:D:r:a:H:vh",
+				"bCo:d:A:B:E:T:p:@:X:G:l:L:q:m0wWe:s:n:c:x:D:r:a:H:vh",
 				lopts, &opt_index);
 
 		if (c == -1) break;
-
+		
+		
 		switch (c) {
 			case 0:
 				if (help_flag){   // '--help' appeared on command line
-					fprintf(stdout,"\n\nHELP_FLAG\n\n");
+					//fprintf(stdout,"\n\nHELP_FLAG\n\n");
+					return usage(stdout,0);
+				}
+				if (conf_flag){
+					//fprintf(stdout,"\n\nCONF_FLAG\n\n");
+
+					if(optind<argc)
+						fname = strdup(argv[optind]);
+					if(fname){
+						parse_platformconfig(fname);
+						return 0;
+
+					}
+					fprintf(stderr,"\t-> No input file specified\n");
 					return usage(stdout,0);
 				}
 				//if opt sets a flag
 				if (lopts[opt_index].flag != 0)
 					break;
+
+
 			case 'b': out_mode[1] = 'b'; break;
 			case 'C': out_mode[1] = 'c'; break;
+			case 'd': coordtype = strdup(optarg); break;
+			case 'A': xLength = atoi(optarg); break;
+			case 'B': yLength = atoi(optarg); break;
+			case 'E': nTiles = atoi(optarg); break;
 			case 'T': refName = strdup(optarg); break;
 			case 'o': fn_out = strdup(optarg); break;
 			case 'p': pxdist = atof(optarg); break;
@@ -1217,18 +1317,19 @@ int main(int argc, char **argv){
 						  return usage(stdout,0);
 					  } else {
 						  if (optopt) { // Bad short option
-							  fprintf(stdout,"./superduper invalid option -- '%c'\n", optopt);
+							  fprintf(stdout,"./decluster invalid option -- '%c'\n", optopt);
 						  } else { // Bad long option
 							  // Do our best.  There is no good solution to finding
 							  // out what the bad option was.
 							  // See, e.g. https://stackoverflow.com/questions/2723888/where-does-getopt-long-store-an-unrecognized-option
 							  if (optind > 0 && strncmp(argv[optind - 1], "--", 2) == 0) {
-								  fprintf(stdout,"./superduper unrecognised option '%s'\n",argv[optind - 1]);
+								  fprintf(stdout,"./decluster unrecognised option '%s'\n",argv[optind - 1]);
 							  }
 						  }
 						  return 0;//usage(stderr, 0);
 					  }
 			default:
+					  //TODO when
 					  fname = strdup(optarg);
 					  fprintf(stderr,"assinging: %s to fname:%s\n",optarg,fname);
 					  break;
@@ -1270,8 +1371,8 @@ int main(int argc, char **argv){
 		return 1;
 	}  
 
-	fprintf(stderr,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d complexity_thr:%d gc_thr:%d min_readlength:%d max_readlength:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only, complexity_thr, gc_thr, min_rLen, max_rLen);
-	fprintf(fp,"./superduper refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d complexity_thr:%d gc_thr:%d min_readlength:%d, max_readlength:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only,complexity_thr, gc_thr,min_rLen, max_rLen);
+	fprintf(stderr,"./decluster refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d complexity_thr:%d gc_thr:%d min_readlength:%d max_readlength:%d coordinateType:%s xLength:%d yLength:%d nTiles:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only, complexity_thr, gc_thr, min_rLen, max_rLen,coordtype,xLength,yLength, nTiles);
+	fprintf(fp,"./decluster refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d complexity_thr:%d gc_thr:%d min_readlength:%d, max_readlength:%d coordinateType:%s xLength:%d yLength:%d nTiles:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only,complexity_thr, gc_thr,min_rLen, max_rLen, coordtype,xLength,yLength, nTiles);
 
 	//TODO why?
 #ifdef __WITH_GSL__
@@ -1284,7 +1385,7 @@ int main(int argc, char **argv){
 
 
 	if(fname){
-		parse_sequencingdata(fn_out,refName,fname,stats_nopreseq,stats_only,nthreads,mapped_only,se_only,mapq,onam3,fp,complexity_thr, gc_thr,aux_stats, min_rLen, max_rLen);
+		parse_sequencingdata(fn_out,refName,fname,stats_nopreseq,stats_only,nthreads,mapped_only,se_only,mapq,onam3,fp,complexity_thr, gc_thr,aux_stats, min_rLen, max_rLen,coordtype, xLength, yLength, nTiles);
 
 	}
 	if(histfile){
