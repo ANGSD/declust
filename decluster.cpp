@@ -281,7 +281,6 @@ aMap char2int;
 
 typedef struct{
 	bam1_t *d;
-	//TODO
 	int64_t xs;
 	int64_t ys;
 	int seqlen;
@@ -685,7 +684,6 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
 
 	//fprintf(stderr,"do_magic queue->l:%d queue->m:%d chr:%d pos:%d\n",q->l,q->m,q->d[0]->core.tid,q->d[0]->core.pos);
 	//fprintf(stderr,"@@@@@@info\t%d\t%d\n",q->d[0]->core.pos+1,q->l);
-	//TODO checkthisbelow
 	//totaldups += q->l -1;
 
 	std::map<size_t,std::map<size_t,std::vector<reldata>> > mymapF;
@@ -770,11 +768,16 @@ int usage(FILE *fp, int is_long_help)
 			"  -v       Verbose mode\n"
 			"  -a       Only use the single end part of the bam (default: 1 (enabled), use -a 0 to disable)\n"
 			"  -X INT	Sequence complexity filter, discard read if complexity<INT (0-100, default: off)\n" 
-			//TODO max,min,range
 			"  -G INT	Maximum GC content allowed, discard read if GC content>INT (0-100, default: off)\n" 
-			//TODO max,min,range
 			"  -l INT	Minimum read length allowed, discard read if read length<INT (default: off)\n" 
 			"  -L INT	Maximum read length allowed, discard read if read length>INT (default: off)\n" 
+			"\n"
+			"  --coordType	STR	Coordinate calculation method used in decluster	(local or global, default: global)\n"
+			"  --xLength	Length of each tile's x axis, to be used in global coordinate calculations (default: 32103)\n"
+			"  --yLength	Length of each tile's y axis, to be used in global coordinate calculations (default: 36059)\n"
+			"  --nTiles	Number of tiles, to be used in global coordinate calculations (default: 78)\n"
+			"\n"
+			"  --getConf	Get sequencing platform specific configurations (tile size and number of tiles)\n" 
 			"\n"
 			"Options for performing extraplation (mirrored from preseq)\n"
 			"  -e       maximum extrapolation (default: 1e+10)\n"
@@ -785,6 +788,7 @@ int usage(FILE *fp, int is_long_help)
 			"  -D       defects mode to extrapolate without testing for defects\n"
 			"  -r       seed for random number generator\n"
 			"\nThe Preseq paper:\n   Daley, T., Smith, A. Predicting the molecular complexity of sequencing libraries.\n   Nat Methods 10, 325–327 (2013). https://doi.org/10.1038/nmeth.2375\n"
+
 			// read filters
 			);
 	fprintf(fp,
@@ -1172,14 +1176,16 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 
 int main(int argc, char **argv){
 	histogram = new size_t [histogram_l];
-	for(int i=1;i<histogram_l;i++)
+	for(int i=0;i<histogram_l;i++)
 		histogram[i] = 0;
+	//for(int i=1;i<histogram_l;i++)
+		//histogram[i] = 0;
 	double max_extrapolation = 1.0e10;
 	double step_size = 1e6;
 	size_t bootstraps = 100;
 	double c_level = 0.95;
 	size_t orig_max_terms = 100;
-	int DEFECTS = 0;
+	int DEFECTS = 2;
 	int VERBOSE = 0;
 	unsigned long int seed = 0;
 
@@ -1223,9 +1229,6 @@ int main(int argc, char **argv){
 
 
 	// novaseq specific values, inferred from data
-	//int *xLength= (int*) 32103;
-	//int *yLength= (int*) 36059;
-	//int *nTiles= (int*) 78;
 
 	int xLength= 32103;
 	int yLength= 36059;
@@ -1299,8 +1302,8 @@ int main(int argc, char **argv){
 			case 'L': max_rLen = atoi(optarg); break;
 			case 'q': mapq = atoi(optarg); break;
 			case 'm': mapped_only = 1; break;
-			case '0': stats_nopreseq = 1; break;
-			case 'w': stats_only = 1; break;
+			case '0': stats_nopreseq = 1; break; //nobam nopreseq
+			case 'w': stats_only = 1; break; //nobam
 			case 'W': aux_stats = 1; break;
 			case 'e': max_extrapolation = atof(optarg); break;
 			case 's': step_size = atof(optarg); break;
@@ -1356,11 +1359,13 @@ int main(int argc, char **argv){
 
 	char onamhist[2048]="";
 	char onamtable[2048]="";
+	char onamtable2[2048]="";
 	char onam3[2048]="";
 	strcat(onam3,fn_out);
 
 	snprintf(onamhist,2048,"%s.hist.txt",fn_out);
 	snprintf(onamtable,2048,"%s.table.txt",fn_out);
+	snprintf(onamtable2,2048,"%s.table_defect.txt",fn_out);
 	if ((fphist = fopen(onamhist, "wb")) == NULL) {
 		fprintf(stderr,"Error opening file for writing\n");
 		return 1;
@@ -1371,10 +1376,9 @@ int main(int argc, char **argv){
 		return 1;
 	}  
 
-	fprintf(stderr,"./decluster refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d complexity_thr:%d gc_thr:%d min_readlength:%d max_readlength:%d coordinateType:%s xLength:%d yLength:%d nTiles:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only, complexity_thr, gc_thr, min_rLen, max_rLen,coordtype,xLength,yLength, nTiles);
-	fprintf(fp,"./decluster refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d complexity_thr:%d gc_thr:%d min_readlength:%d, max_readlength:%d coordinateType:%s xLength:%d yLength:%d nTiles:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only,complexity_thr, gc_thr,min_rLen, max_rLen, coordtype,xLength,yLength, nTiles);
+	fprintf(stderr,"./decluster refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d stats_nopreseq:%d complexity_thr:%d gc_thr:%d min_readlength:%d max_readlength:%d coordinateType:%s xLength:%d yLength:%d nTiles:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only,stats_nopreseq, complexity_thr, gc_thr, min_rLen, max_rLen,coordtype,xLength,yLength, nTiles);
+	fprintf(fp,"./decluster refName:%s fname:%s out_mode:%s pxdist:%f nthread:%d mapped_only:%d mapq:%d\nmax_extrap:%f step:%f boot:%lu c_lev:%f max_term:%lu defect:%d verbose:%d seed:%lu se_only:%d stats_nopreseq:%d complexity_thr:%d gc_thr:%d min_readlength:%d, max_readlength:%d coordinateType:%s xLength:%d yLength:%d nTiles:%d\n",refName,fname,out_mode,pxdist,nthreads,mapped_only,mapq,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed,se_only,stats_nopreseq,complexity_thr, gc_thr,min_rLen, max_rLen, coordtype,xLength,yLength, nTiles);
 
-	//TODO why?
 #ifdef __WITH_GSL__
 	fprintf(stderr,"\t-> Using GSL library functions\n");
 	fprintf(fp,"\t-> Using GSL library functions\n");
@@ -1412,18 +1416,23 @@ int main(int argc, char **argv){
 		if(histogram[i])
 			last=i;
 	std::vector<double> to_preseq;
-	//for(int i=0;i<=last;i++){
-	for(int i=1;i<=last;i++){
-		fprintf(fphist,"%d\t%lu\n",i,histogram[i]);
+	for(int i=0;i<=last;i++){
+	//for(int i=1;i<=last;i++){
+
+		if(i)
+			fprintf(fphist,"%d\t%lu\n",i,histogram[i]);
 		//fprintf(stderr,"\n\nHISTOGRAM:\n%d\t%lu\n",i,histogram[i]);
 		to_preseq.push_back(histogram[i]);
 	}
 
 	fclose(fphist);
 
+
 	if(!stats_nopreseq){
-		int lc_extrap(std::vector<double> &counts_hist,char *nam,double max_extrapolation, double step_size, size_t bootstraps, double c_level,size_t orig_max_terms, int DEFECTS,int VERBOSE, unsigned long int seed);
-		lc_extrap(to_preseq,onamtable,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed);
+		//int lc_extrap(std::vector<double> &counts_hist,char *nam,double max_extrapolation, double step_size, size_t bootstraps, double c_level,size_t orig_max_terms, int DEFECTS,int VERBOSE, unsigned long int seed);
+		//lc_extrap(to_preseq,onamtable,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed);
+		int lc_extrap(std::vector<double> &counts_hist,char *nam, char *nam_d,double max_extrapolation, double step_size, size_t bootstraps, double c_level,size_t orig_max_terms, int DEFECTS,int VERBOSE, unsigned long int seed);
+		lc_extrap(to_preseq,onamtable,onamtable2,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed);
 	}
 	fclose(fp);
 	fprintf(stderr,
