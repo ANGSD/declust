@@ -309,12 +309,12 @@ void resample_hist(const vector<size_t> &orig_hist_bins,
 
 //void
 //extrap_bootstrap(const bool VERBOSE, const bool DEFECTS,
-		//const unsigned long int seed,
-		//const vector<double> &orig_hist,
-		//const size_t bootstraps, const size_t orig_max_terms,
-		//const int diagonal, const double bin_step_size,
-		//const double max_extrapolation, const size_t max_iter,
-		//vector< vector<double> > &bootstrap_estimates) {
+//const unsigned long int seed,
+//const vector<double> &orig_hist,
+//const size_t bootstraps, const size_t orig_max_terms,
+//const int diagonal, const double bin_step_size,
+//const double max_extrapolation, const size_t max_iter,
+//vector< vector<double> > &bootstrap_estimates) {
 void
 extrap_bootstrap(const bool VERBOSE, int DEFECTS,
 		const unsigned long int seed,
@@ -701,7 +701,7 @@ int lc_extrap(vector<double> &counts_hist,char *nam, char *nam_d, double max_ext
 
 	//size_t total_reads = 0;
 	//for(size_t i = 0; i < counts_hist.size(); i++){
-		//total_reads += i*counts_hist[i];
+	//total_reads += i*counts_hist[i];
 	//}
 	//assert(total_reads == n_reads);
 
@@ -716,88 +716,138 @@ int lc_extrap(vector<double> &counts_hist,char *nam, char *nam_d, double max_ext
 	/////////////////////////////////////////////////////////////////////
 	// ESTIMATE COMPLEXITY CURVE
 
-	if(VERBOSE)
-		cerr << "[ESTIMATING YIELD CURVE]" << endl;
-	vector<double> yield_estimates;
 
-	vector<double> yield_estimates_d;
+
+
+	////////////////////////////////////////////////////////////////////////
+	//
+	//	DECLUSTER defect mode
+	//
+	//
+	//	if -D 0:	never use defect mode; exit with error
+	//	if -D 1:	always use defect mode
+	//	if -D 2:	use both defect_enabled and defect_disabled (default
+	//
+
+
 
 	if (VERBOSE)
 		cerr << "[BOOTSTRAPPING HISTOGRAM]" << endl;
 
 	const size_t max_iter = 10*bootstraps;
 
-
-
-	//	DECLUSTER defect mode
-	//
-	//	by default (2):	if it fails activate defect mode
-	//
-	//	if -D 0:	never use defect mode; exit with error
-	//	if -D 1:	always use defect mode
-	//
-	//
-
-	vector<vector <double> > bootstrap_estimates;
-	vector<vector <double> > bootstrap_estimates_d;
-
 	switch (DEFECTS){
+
 		case 0:
+			{
+
+			fprintf(stderr,"\n[Decluster]\tUsing defect mode 0: defect mode disabled.\n");
+
+			if(VERBOSE)
+				cerr << "[ESTIMATING YIELD CURVE]" << endl;
+			vector<double> yield_estimates;
+
+
+			vector<vector <double> > bootstrap_estimates;
+
+			if (VERBOSE)
+				cerr << "[COMPUTING CONFIDENCE INTERVALS]" << endl;
 
 			extrap_bootstrap(VERBOSE, DEFECTS, seed, counts_hist, bootstraps, orig_max_terms, diagonal, step_size, max_extrapolation, max_iter, bootstrap_estimates);
+
+			if (VERBOSE)
+				cerr << "[WRITING OUTPUT]" << endl;
+
+			vector<double> yield_upper_ci_lognormal, yield_lower_ci_lognormal;
+			vector_median_and_ci(bootstrap_estimates, c_level, yield_estimates,yield_lower_ci_lognormal, yield_upper_ci_lognormal);
+
+			write_predicted_complexity_curve(outfile, c_level, step_size,yield_estimates, yield_lower_ci_lognormal,	yield_upper_ci_lognormal);
+			fprintf(stderr,"\t-> Output in: \'%s\'\n",nam);
 			break;
+			}
 
 		case 1:
+			{
+
+			fprintf(stderr,"\n[Decluster]\tUsing defect mode 1: defect mode enabled - only use defect mode \n");
+
+			if(VERBOSE)
+				cerr << "[ESTIMATING YIELD CURVE]" << endl;
+			vector<double> yield_estimates;
+
+			vector<vector <double> > bootstrap_estimates;
+
+			if (VERBOSE)
+				cerr << "[COMPUTING CONFIDENCE INTERVALS]" << endl;
 
 			extrap_bootstrap(VERBOSE, DEFECTS, seed, counts_hist, bootstraps,orig_max_terms, diagonal, step_size, max_extrapolation, max_iter, bootstrap_estimates);
+
+			if (VERBOSE)
+				cerr << "[WRITING OUTPUT]" << endl;
+
+			vector<double> yield_upper_ci_lognormal, yield_lower_ci_lognormal;
+			vector_median_and_ci(bootstrap_estimates, c_level, yield_estimates,yield_lower_ci_lognormal, yield_upper_ci_lognormal);
+
+			write_predicted_complexity_curve(outfile, c_level, step_size,yield_estimates, yield_lower_ci_lognormal,	yield_upper_ci_lognormal);
+			fprintf(stderr,"\t-> Output in: \'%s\'\n",nam);
 			break;
+			}
 
 		case 2:
+			{
+
+			fprintf(stderr,"\n[Decluster]\tUsing defect mode 2: use both defect_enabled and defect_disabled. If estimates cannot be made without defect mode decluster will not write output for defect_enabled results.\n");
+
+			if(VERBOSE)
+				cerr << "[ESTIMATING YIELD CURVE]" << endl;
+			vector<double> yield_estimates;
+			vector<double> yield_estimates_d;
+
+			vector<vector <double> > bootstrap_estimates;
+			vector<vector <double> > bootstrap_estimates_d;
+
+			if (VERBOSE)
+				cerr << "[COMPUTING CONFIDENCE INTERVALS]" << endl;
 
 			extrap_bootstrap_d(VERBOSE, DEFECTS, seed, counts_hist, bootstraps, orig_max_terms, diagonal, step_size, max_extrapolation, max_iter, bootstrap_estimates, bootstrap_estimates_d);
+
+			vector<double> yield_upper_ci_lognormal_d, yield_lower_ci_lognormal_d;
+			vector_median_and_ci(bootstrap_estimates_d, c_level, yield_estimates_d,yield_lower_ci_lognormal_d, yield_upper_ci_lognormal_d);
+
+			if (bootstrap_estimates.empty()){
+				fprintf(stderr,"\n[Decluster]\tBootstrap estimates are empty for defect_disabled lc_extrap. Will not print the results for defect_disabled.\n"); 
+			}else{
+				vector<double> yield_upper_ci_lognormal, yield_lower_ci_lognormal;
+				vector_median_and_ci(bootstrap_estimates, c_level, yield_estimates,yield_lower_ci_lognormal, yield_upper_ci_lognormal);
+
+
+				if (VERBOSE)
+					cerr << "[WRITING OUTPUT]" << endl;
+
+				write_predicted_complexity_curve(outfile, c_level, step_size,yield_estimates, yield_lower_ci_lognormal,	yield_upper_ci_lognormal);
+				fprintf(stderr,"\t-> Output in: \'%s\'\n",nam);
+
+			}
+
+			if (VERBOSE)
+				cerr << "[WRITING OUTPUT]" << endl;
+
+
+			std::string outfile_d=std::string(nam_d);
+			write_predicted_complexity_curve(outfile_d, c_level, step_size, yield_estimates_d, yield_lower_ci_lognormal_d,yield_upper_ci_lognormal_d);
+			fprintf(stderr,"\t-> Output in: \'%s\'\n",nam_d);
+
 			break;
+			}
 
 
 		default:
-			fprintf(stderr,"\n[Decluster]\tDefect mode only allows for values [1,2,3], current value: %d. Will exit!\n",DEFECTS);
+			fprintf(stderr,"\n[Decluster]\tDefect mode only allows values [0,1,2], current value: %d. Will exit!\n",DEFECTS);
 			break;
 
 
 	}
 
 
-	/////////////////////////////////////////////////////////////////////
-	if (VERBOSE)
-		cerr << "[COMPUTING CONFIDENCE INTERVALS]" << endl;
-
-	// yield ci
-	vector<double> yield_upper_ci_lognormal, yield_lower_ci_lognormal;
-
-	vector_median_and_ci(bootstrap_estimates, c_level, yield_estimates,
-			yield_lower_ci_lognormal, yield_upper_ci_lognormal);
-
-
-
-	if (DEFECTS == 2){
-		vector<double> yield_upper_ci_lognormal_d, yield_lower_ci_lognormal_d;
-		vector_median_and_ci(bootstrap_estimates_d, c_level, yield_estimates_d,yield_lower_ci_lognormal_d, yield_upper_ci_lognormal_d);
-	}
-
-	/////////////////////////////////////////////////////////////////////
-	if (VERBOSE)
-		cerr << "[WRITING OUTPUT]" << endl;
-
-	write_predicted_complexity_curve(outfile, c_level, step_size,
-			yield_estimates, yield_lower_ci_lognormal,
-			yield_upper_ci_lognormal);
-
-
-	if (DEFECTS == 2){
-		std::string outfile_d=std::string(nam_d);
-		write_predicted_complexity_curve(outfile_d, c_level, step_size, yield_estimates_d, yield_lower_ci_lognormal,yield_upper_ci_lognormal);
-		fprintf(stderr,"\t-> Output in: \'%s\'\n",nam_d);
-	}
-
-	fprintf(stderr,"\t-> Output in: \'%s\'\n",nam);
 	return EXIT_SUCCESS;
 }
