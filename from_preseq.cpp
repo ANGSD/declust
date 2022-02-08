@@ -655,8 +655,6 @@ int lc_extrap(vector<double> &counts_hist,char *nam, char *nam_d, double max_ext
 		seed = rand();
 	}
 
-	size_t n_reads = 0;
-
 	const size_t max_observed_count = counts_hist.size() - 1;
 	const double distinct_reads = accumulate(counts_hist.begin(), counts_hist.end(), 0.0);
 
@@ -675,7 +673,6 @@ int lc_extrap(vector<double> &counts_hist,char *nam, char *nam_d, double max_ext
 		static_cast<size_t>(std::count_if(counts_hist.begin(), counts_hist.end(),
 					bind2nd(std::greater<double>(), 0.0)));
 	if (VERBOSE)
-		//std::cerr << "TOTAL READS     = " << n_reads << endl
 		std::cerr << "TOTAL READS     = " << total_reads << endl
 			<< "DISTINCT READS  = " << distinct_reads << endl
 			<< "DISTINCT COUNTS = " << distinct_counts << endl
@@ -700,11 +697,6 @@ int lc_extrap(vector<double> &counts_hist,char *nam, char *nam_d, double max_ext
 		return 0;
 	}
 
-	//size_t total_reads = 0;
-	//for(size_t i = 0; i < counts_hist.size(); i++){
-	//total_reads += i*counts_hist[i];
-	//}
-	//assert(total_reads == n_reads);
 
 	// catch if all reads are distinct
 	if (orig_max_terms < MIN_REQUIRED_COUNTS)
