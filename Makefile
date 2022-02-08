@@ -64,7 +64,7 @@ test: $(testbams) $(testsmallbams)
 	for bam in $(testsmallbams);do \
 		./decluster $${bam} -r 42 -o $${bam%.bam}_bamin.test 2> $${bam%.bam}_bamin.log; \
 		./decluster $${bam%.bam}_bamin.test.noClusterDuplicates.bam -r 42 -o $${bam%.bam}_ncld_bamin.test 2> $${bam%.bam}_ncld_bamin.log; \
-		./decluster -H $${bam%.bam}_bamin.hist.txt -r 42 -o $${bam%.bam}_histin.test 2> $${bam%.bam}_histin.log; \
+		./decluster -H $${bam%.bam}_bamin.test.hist.txt -r 42 -o $${bam%.bam}_histin.test 2> $${bam%.bam}_histin.log; \
 		diff $${bam%.bam}_bamin.test.table.txt $${bam%.bam}_bamin.table.expected.txt; \
 		diff $${bam%.bam}_histin.test.table.txt $${bam%.bam}_histin.table.expected.txt; \
 		diff $${bam%.bam}_ncld_bamin.test.table.txt $${bam%.bam}_ncld_bamin.table.expected.txt; \
