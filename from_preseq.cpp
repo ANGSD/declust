@@ -675,7 +675,8 @@ int lc_extrap(vector<double> &counts_hist,char *nam, char *nam_d, double max_ext
 		static_cast<size_t>(std::count_if(counts_hist.begin(), counts_hist.end(),
 					bind2nd(std::greater<double>(), 0.0)));
 	if (VERBOSE)
-		std::cerr << "TOTAL READS     = " << n_reads << endl
+		//std::cerr << "TOTAL READS     = " << n_reads << endl
+		std::cerr << "TOTAL READS     = " << total_reads << endl
 			<< "DISTINCT READS  = " << distinct_reads << endl
 			<< "DISTINCT COUNTS = " << distinct_counts << endl
 			<< "MAX COUNT       = " << max_observed_count << endl
