@@ -153,7 +153,6 @@ size_t pcrdups=0;
 size_t clustdups=0;
 size_t nproc=0;
 size_t nprocfilt=0;
-//size_t purecount;
 size_t purecount=0;
 
 int nreads_per_pos=4;//assuming this is the number reads per pos. If larger the program will reallocate
@@ -411,21 +410,26 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 	size_t dcount;
 	int plug=0;
 	for(std::map<size_t,std::map<size_t,std::vector<reldata> >>::iterator it=mymap.begin();it!=mymap.end();it++) {
-		//outer iteration:
+	  //outer iteration:
 		//|__ same read length
 		// same mapping position is already a requirement before plugout is called
 
 		//dcount= duplicate fragment count, to give preseq
 		dcount=0;
 		std::map<size_t,std::vector<reldata>>::iterator in;
-
+		in = it->second.begin();
+		std::vector<reldata> &rd=in->second;
+		if(rd.size()==1){
+		  if(fp)
+		    assert(sam_write1(fp, hdr,rd[0].d)>=0);
+		  continue;
+		}
 		for (in = it->second.begin();in !=it->second.end();++in){
 			//inner iteration:
 			//|__ same surface+same lane
 
 			std::vector<reldata> &rd=in->second;
 			totaldups+=rd.size();
-
 			//just a  duplicate alone in a SURFACE+LANE pair
 			//first it came with its family
 			//but it is alone now because he has a unique length
@@ -682,7 +686,7 @@ void printmap(FILE *fp,std::map<size_t,std::vector<reldata> > &mymap){
 
 void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupFP, char *coordtype, int xLength, int yLength, int nTiles){
 
-	//fprintf(stderr,"do_magic queue->l:%d queue->m:%d chr:%d pos:%d\n",q->l,q->m,q->d[0]->core.tid,q->d[0]->core.pos);
+  //  fprintf(stderr,"do_magic queue->l:%d queue->m:%d chr:%d pos:%ld\n",q->l,q->m,q->d[0]->core.tid,q->d[0]->core.pos);
 	//fprintf(stderr,"@@@@@@info\t%d\t%d\n",q->d[0]->core.pos+1,q->l);
 	//totaldups += q->l -1;
 
@@ -704,6 +708,7 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
 		else
 			plugin(mymapF,b,hdr,coordtype,xLength,yLength,nTiles);
 	}
+
 	std::vector<size_t> counter;
 	plugout(mymapF,hdr,fp,fp2,counter);
 	plugout(mymapR,hdr,fp,fp2,counter);
@@ -716,21 +721,25 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
 
 	//assert(sam_write1(fp3, hdr, q->d[lrand48() %q->l])>=0); //<- this one prints a random read as the represent of the dups
 	if(mymapF.size()>0){
-		std::vector<reldata> &re = mymapF.rbegin()->second.rbegin()->second;
-		if(nodupFP)
-			assert(sam_write1(nodupFP, hdr,re[0].d));
-		purecount++;
-		//    fprintf(stderr,"%f len:%d purecount:%d\n",CMA,re[0].d->core.l_qseq,purecount);
-		CMA = (re[0].d->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
-		//fprintf(stderr,"%f len:%d purecount:%d\n",CMA,re[0].d->core.l_qseq,purecount);
+	  for(std::map<size_t,std::map<size_t,std::vector<reldata>>>::iterator it=mymapF.begin();it!=mymapF.end();it++){
+	    std::vector<reldata> &re = it->second.rbegin()->second;
+	    if(nodupFP)
+	      assert(sam_write1(nodupFP, hdr,re[0].d));
+	    purecount++;
+	    //    fprintf(stderr,"%f len:%d purecount:%d\n",CMA,re[0].d->core.l_qseq,purecount);
+	    CMA = (re[0].d->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
+	    //fprintf(stderr,"%f len:%d purecount:%d\n",CMA,re[0].d->core.l_qseq,purecount);
+	  }
 	}
 
-	if(mymapR.size()>0){
-		std::vector<reldata> &re = mymapR.rbegin()->second.rbegin()->second;
-		if(nodupFP)
-			assert(sam_write1(nodupFP, hdr,re[0].d));
-		purecount++;
-		CMA = (re[0].d->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
+	if(mymapR.size()>0) {
+	   for(std::map<size_t,std::map<size_t,std::vector<reldata>>>::iterator it=mymapR.begin();it!=mymapR.end();it++) {
+	     std::vector<reldata> &re = it->second.rbegin()->second;
+	     if(nodupFP)
+	       assert(sam_write1(nodupFP, hdr,re[0].d));
+	     purecount++;
+	     CMA = (re[0].d->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
+	   }
 	}
 
 }
@@ -1110,7 +1119,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 	free(queue->d);
 	free(queue);
 	//TODO?
-	//  bam_hdr_destroy(hdr);
+	//
 	for(aMap::iterator it=char2int.begin();it!=char2int.end();it++)
 		free(it->first);
 
@@ -1187,13 +1196,13 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 		fprintf(fp,"#\tMean sequence complexity (MSC):\n"
 				"MSC\t%f\n",hmean);
 	}
-
+	bam_hdr_destroy(hdr);	
 }
 
 
 
 
-int main(int argc, char **argv){
+int main(int argc, char **argv) {
 	histogram = new size_t [histogram_l];
 	for(int i=0;i<histogram_l;i++)
 		histogram[i] = 0;
@@ -1455,17 +1464,21 @@ int main(int argc, char **argv){
 		int lc_extrap(std::vector<double> &counts_hist,char *nam, char *nam_d,double max_extrapolation, double step_size, size_t bootstraps, double c_level,size_t orig_max_terms, int DEFECTS,int VERBOSE, unsigned long int seed);
 		lc_extrap(to_preseq,onamtable,onamtable2,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed);
 	}
-	fclose(fp);
+
 	fprintf(stderr,
 			"\n"
 			"\t[ALL done] cpu-time used =  %.2f sec\n"
 			"\t[ALL done] walltime used =  %.2f sec\n"
 			,(float)(clock() - t) / CLOCKS_PER_SEC, (float)(time(NULL) - t2));  
+#if 0
 	fprintf(fp,
 			"\n"
 			"#[ALL done] cpu-time used =  %.2f sec\n"
 			"#[ALL done] walltime used =  %.2f sec\n"
 			,(float)(clock() - t) / CLOCKS_PER_SEC, (float)(time(NULL) - t2));
+#endif
+	fclose(fp);
+	delete [] histogram;
 	return 0;
 }
 
