@@ -675,7 +675,7 @@ void printmap(FILE *fp,std::map<size_t,std::vector<reldata> > &mymap){
 		fprintf(fp,"key:%lu\n",it->first);
 		std::vector<reldata> &rd=it->second;
 		for(int i=0;i<rd.size();i++)
-			fprintf(fp,"\tval: xs:%lld ys:%lld\n",rd[i].xs,rd[i].ys);
+			fprintf(fp,"\tval: xs:%ld ys:%ld\n",rd[i].xs,rd[i].ys);
 	}
 #endif
 }
@@ -872,7 +872,7 @@ void parse_platformconfig(char *fname){
 	purecount=0;
 
 
-	while(((ret=sam_read1(in,hdr,b)))>0){
+	while(((ret=sam_read1(in,hdr,b)))>=0){
 
 
 		mystr = strncpy(mystr,bam_get_qname(b),2048);
@@ -1009,7 +1009,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 
 	int ret;
 	int refId=-1;
-	while(((ret=sam_read1(in,hdr,b)))>0){
+	while(((ret=sam_read1(in,hdr,b)))>=0){
 		nproc++;
 
 		//if -m was used, discard unmapped reads
