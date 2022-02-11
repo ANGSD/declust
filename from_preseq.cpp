@@ -651,9 +651,16 @@ int lc_extrap(vector<double> &counts_hist,char *nam, char *nam_d, double max_ext
 	int diagonal = 0;
 
 	// if seed is not set, make it random
-	if(seed == 0){
+	//if(seed == 0){
+		//seed = rand();
+	//}
+	if(seed){
+		generator.seed(seed);
+	}else{
 		seed = rand();
 	}
+		
+
 
 	const size_t max_observed_count = counts_hist.size() - 1;
 	const double distinct_reads = accumulate(counts_hist.begin(), counts_hist.end(), 0.0);

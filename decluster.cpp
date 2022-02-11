@@ -745,49 +745,68 @@ int usage(FILE *fp, int is_long_help)
 			"\n"
 			"Options:\n"
 			// output options
-			"  -b       Output BAM\n"
-			"  -C       Output CRAM (requires reference fasta; use -T)\n"
-			"  -o FILE  Output file name\n"
-			"  -p INT   Pixel distance (default: 12000)\n"
-			"  -T FILE  Reference in the fasta format (required for reading and writing crams)\n"
-			"  -@ INT   Number of threads to use\n"
-			"  -q INT   Mapping quality filter (default: off)\n"
-			"  -m       Discard unmapped reads (default: off)\n"
-			"  -0       Only calculate statistics; do not run preseq (default: off)\n"
-			"  -w       Only calculate statistics and run preseq; do not output bam files (default: off)\n"
-			"  -W       Calculate additional statistics (default: 0, off)\n"
-			"					Output summary table and frequency distribution tables\n"
+			"  -b		Output BAM\n"
+			"  -C		Output CRAM (requires reference fasta; use -T)\n"
+			"  -o FILE	Output file name\n"
+			"  -p INT	Pixel distance (default: 12000)\n"
+			"  -T FILE	Reference in the fasta format (required for reading and writing crams)\n"
+			"  -@ INT	Number of threads to use\n"
+			"  -a		Only use the single end part of the bam (default: 1 (enabled), use -a 0 to disable)\n"
+			"\n"
+			"  -0 		Only calculate statistics; do not run preseq (default: off)\n"
+			"  -w 		Only calculate statistics and run preseq; do not output bam files (default: off)\n"
+			"  -W 		Calculate additional statistics (default: 0, off)\n"
+			"	  		Output summary table and frequency distribution tables\n"
 			"								MSC - Mean sequence complexity\n"
 			"								MGC - Mean GC content\n"
 			"								MFS - Mean fragment size\n"
 			"								SCD - Sequence complexity distribution\n"
 			"								GCD - GC content distribution\n"
 			"								FSD - Fragment size distribution\n"
-			"					Example: To extract sequence complexity distribution, use:\n"
-			"						`grep ^SCD out.dupstat.txt | cut -f 2-`\n"
-			"  -v       Verbose mode\n"
-			"  -a       Only use the single end part of the bam (default: 1 (enabled), use -a 0 to disable)\n"
+			"     					Example: To extract sequence complexity distribution, use:\n"
+			"							`grep ^SCD out.dupstat.txt | cut -f 2-`\n"
+			"\n"
+			"\n"
+			"  Filters\n"
+			"  -------\n"
+			"  -m 		Discard unmapped reads (default: off)\n"
+			"  -q INT	Mapping quality filter (default: off)\n"
 			"  -X INT	Sequence complexity filter, discard read if complexity<INT (0-100, default: off)\n" 
 			"  -G INT	Maximum GC content allowed, discard read if GC content>INT (0-100, default: off)\n" 
 			"  -l INT	Minimum read length allowed, discard read if read length<INT (default: off)\n" 
 			"  -L INT	Maximum read length allowed, discard read if read length>INT (default: off)\n" 
 			"\n"
-			"  --coordType	STR	Coordinate calculation method used in decluster	(local or global, default: global)\n"
-			"  --xLength	Length of each tile's x axis, to be used in global coordinate calculations (default: 32103)\n"
-			"  --yLength	Length of each tile's y axis, to be used in global coordinate calculations (default: 36059)\n"
-			"  --nTiles	Number of tiles, to be used in global coordinate calculations (default: 78)\n"
 			"\n"
-			"  --getConf	Get sequencing platform specific configurations (tile size and number of tiles)\n" 
+			"  Sequencing platform specifications\n"
+			"  --------------------------------- \n"
+			"  --getConf		Infer sequencing platform specific configurations from data (xLength, yLength and nTiles)\n" 
+			"\n"
+			"  -d, --coordType STR\n"
+			"  					Coordinate calculation method used in decluster	(local or global, default: global)\n"
+			"  -A,	--xLength INT\n"
+			"  					Length of each tile's x axis, to be used in global coordinate calculations (default: 32103)\n"
+			"  -B, --yLength INT\n"
+			"  					Length of each tile's y axis, to be used in global coordinate calculations (default: 36059)\n"
+			"  -E, --nTiles INT\n"
+			"  					Number of tiles, to be used in global coordinate calculations (default: 78)\n"
 			"\n"
 			"Options for performing extraplation (mirrored from preseq)\n"
-			"  -e       maximum extrapolation (default: 1e+10)\n"
-			"  -s       step size in extrapolations (default: 1e+06)\n"
-			"  -n       number of bootstraps (default: 100)\n"
-			"  -c       level for confidence intervals (default: 0.95)\n"
-			"  -x       maximum number of terms\n"
-			"  -D       defects mode to extrapolate without testing for defects\n"
-			"  -r       seed for random number generator\n"
+			"  -D INT <1,2,3>\n"
+			"  			Defects mode to extrapolate without testing for defects\n"
+			"  				-D 0	Only do defect disabled lc extrap\n"
+			"  				-D 1	Only do defect enabled lc extrap (default)\n"
+			"  				-D 2	Do both defect enabled and defect disabled lc extrap (default)\n"
+			"  -v		Verbose mode\n"
+			"  -e		maximum extrapolation (default: 1e+10)\n"
+			"  -s		step size in extrapolations (default: 1e+06)\n"
+			"  -n		number of bootstraps (default: 100)\n"
+			"  -c		level for confidence intervals (default: 0.95)\n"
+			"  -x		maximum number of terms\n"
+			"  -r, --seed	seed for random number generator\n"
+			"\n"
 			"\nThe Preseq paper:\n   Daley, T., Smith, A. Predicting the molecular complexity of sequencing libraries.\n   Nat Methods 10, 325–327 (2013). https://doi.org/10.1038/nmeth.2375\n"
+			"\n"
+			"\n"
 
 			// read filters
 			);
@@ -1248,6 +1267,7 @@ int main(int argc, char **argv){
 			{"xLength", 1, 0, 'A'},
 			{"yLength", 1, 0, 'B'},
 			{"nTiles", 1, 0, 'E'},
+			{"seed", 1, 0, 'r'},
 			{NULL, 0, NULL, 0}
 			//{0, 0, 0, 0}
 		};
@@ -1287,15 +1307,14 @@ int main(int argc, char **argv){
 
 			case 'b': out_mode[1] = 'b'; break;
 			case 'C': out_mode[1] = 'c'; break;
+			case 'o': fn_out = strdup(optarg); break;
 			case 'd': coordtype = strdup(optarg); break;
 			case 'A': xLength = atoi(optarg); break;
 			case 'B': yLength = atoi(optarg); break;
 			case 'E': nTiles = atoi(optarg); break;
 			case 'T': refName = strdup(optarg); break;
-			case 'o': fn_out = strdup(optarg); break;
 			case 'p': pxdist = atof(optarg); break;
 			case '@': nthreads = atoi(optarg); break;
-			case 'a': se_only = atoi(optarg); break;
 			case 'X': complexity_thr = atoi(optarg); break;
 			case 'G': gc_thr = atoi(optarg); break;
 			case 'l': min_rLen = atoi(optarg); break;
@@ -1311,6 +1330,8 @@ int main(int argc, char **argv){
 			case 'c': c_level = atof(optarg); break;
 			case 'x': orig_max_terms = atoi(optarg); break;
 			case 'D': DEFECTS = atoi(optarg); break;
+			case 'r': seed = atoi(optarg); break;
+			case 'a': se_only = atoi(optarg); break;
 			case 'H': histfile = strdup(optarg); break;
 			case 'v': VERBOSE = 1; break;
 			case 'h': help_flag = 1;break;

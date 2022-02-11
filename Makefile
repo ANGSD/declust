@@ -52,15 +52,34 @@ clean:
 	rm  -f decluster *.o *.d
 
 
-testbams := $(wildcard tests/*bam)
+testbams := $(wildcard tests/test*bam)
+testsmallbams := $(wildcard tests/small.bam)
 
-#TODO add dupstat checks
-test: $(testbams)
+test: $(testbams) $(testsmallbams)
 	for bam in $(testbams); do \
 		./decluster -0 -w $${bam} -o $${bam%.bam}.test 2> $${bam%.bam}.log; \
 		diff $${bam%.bam}.test.hist.txt $${bam%.bam}.expected.hist.txt; \
 		bash -c "diff <(sed 1d $${bam%.bam}.test.dupstat.txt) <(sed 1d $${bam%.bam}.expected.dupstat.txt)"; \
 	done
+	for bam in $(testsmallbams);do \
+		./decluster $${bam} -r 42 -o $${bam%.bam}_bamin.test 2> $${bam%.bam}_bamin.log; \
+		./decluster $${bam%.bam}_bamin.test.noClusterDuplicates.bam -r 42 -o $${bam%.bam}_ncld_bamin.test 2> $${bam%.bam}_ncld_bamin.log; \
+		./decluster -H $${bam%.bam}_bamin.test.hist.txt -r 42 -o $${bam%.bam}_histin.test 2> $${bam%.bam}_histin.log; \
+		diff $${bam%.bam}_bamin.test.table.txt $${bam%.bam}_bamin.table.expected.txt; \
+		diff $${bam%.bam}_histin.test.table.txt $${bam%.bam}_histin.table.expected.txt; \
+		diff $${bam%.bam}_ncld_bamin.test.table.txt $${bam%.bam}_ncld_bamin.table.expected.txt; \
+		diff $${bam%.bam}_bamin.test.table_defect.txt $${bam%.bam}_bamin.table_defect.expected.txt; \
+		diff $${bam%.bam}_histin.test.table_defect.txt $${bam%.bam}_histin.table_defect.expected.txt; \
+		diff $${bam%.bam}_ncld_bamin.test.table_defect.txt $${bam%.bam}_ncld_bamin.table_defect.expected.txt; \
+		diff $${bam%.bam}_bamin.test.table.txt $${bam%.bam}_histin.test.table.txt; \
+		diff $${bam%.bam}_bamin.test.table.txt $${bam%.bam}_ncld_bamin.test.table.txt; \
+		diff $${bam%.bam}_histin.test.table.txt $${bam%.bam}_ncld_bamin.test.table.txt; \
+		diff $${bam%.bam}_bamin.test.table_defect.txt $${bam%.bam}_histin.test.table_defect.txt; \
+		diff $${bam%.bam}_bamin.test.table_defect.txt $${bam%.bam}_ncld_bamin.test.table_defect.txt; \
+		diff $${bam%.bam}_histin.test.table_defect.txt $${bam%.bam}_ncld_bamin.test.table_defect.txt; \
+	done
+
+	#addtestaux
 
 cleantest:
-	rm -v tests/*.test* tests/*.log
+	rm -v tests/*.test* tests/*.log tests/*bamin.test* tests/*histin.test*
