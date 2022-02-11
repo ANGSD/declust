@@ -12,6 +12,6 @@ CLD	16
 #	PCR duplicates:
 PCRD	4
 #	Pure count:
-PRC	1
+PRC	2
 #	Cumulative moving average:
-CMA	35.000000
+CMA	32.500000

@@ -410,7 +410,7 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 	size_t dcount;
 	int plug=0;
 	for(std::map<size_t,std::map<size_t,std::vector<reldata> >>::iterator it=mymap.begin();it!=mymap.end();it++) {
-	  //outer iteration:
+		//outer iteration:
 		//|__ same read length
 		// same mapping position is already a requirement before plugout is called
 
@@ -420,9 +420,9 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 		in = it->second.begin();
 		std::vector<reldata> &rd=in->second;
 		if(rd.size()==1){
-		  if(fp)
-		    assert(sam_write1(fp, hdr,rd[0].d)>=0);
-		  continue;
+			if(fp)
+				assert(sam_write1(fp, hdr,rd[0].d)>=0);
+			continue;
 		}
 		for (in = it->second.begin();in !=it->second.end();++in){
 			//inner iteration:
@@ -686,7 +686,7 @@ void printmap(FILE *fp,std::map<size_t,std::vector<reldata> > &mymap){
 
 void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupFP, char *coordtype, int xLength, int yLength, int nTiles){
 
-  //  fprintf(stderr,"do_magic queue->l:%d queue->m:%d chr:%d pos:%ld\n",q->l,q->m,q->d[0]->core.tid,q->d[0]->core.pos);
+	//  fprintf(stderr,"do_magic queue->l:%d queue->m:%d chr:%d pos:%ld\n",q->l,q->m,q->d[0]->core.tid,q->d[0]->core.pos);
 	//fprintf(stderr,"@@@@@@info\t%d\t%d\n",q->d[0]->core.pos+1,q->l);
 	//totaldups += q->l -1;
 
@@ -721,25 +721,25 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
 
 	//assert(sam_write1(fp3, hdr, q->d[lrand48() %q->l])>=0); //<- this one prints a random read as the represent of the dups
 	if(mymapF.size()>0){
-	  for(std::map<size_t,std::map<size_t,std::vector<reldata>>>::iterator it=mymapF.begin();it!=mymapF.end();it++){
-	    std::vector<reldata> &re = it->second.rbegin()->second;
-	    if(nodupFP)
-	      assert(sam_write1(nodupFP, hdr,re[0].d));
-	    purecount++;
-	    //    fprintf(stderr,"%f len:%d purecount:%d\n",CMA,re[0].d->core.l_qseq,purecount);
-	    CMA = (re[0].d->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
-	    //fprintf(stderr,"%f len:%d purecount:%d\n",CMA,re[0].d->core.l_qseq,purecount);
-	  }
+		for(std::map<size_t,std::map<size_t,std::vector<reldata>>>::iterator it=mymapF.begin();it!=mymapF.end();it++){
+			std::vector<reldata> &re = it->second.rbegin()->second;
+			if(nodupFP)
+				assert(sam_write1(nodupFP, hdr,re[0].d));
+			purecount++;
+			//    fprintf(stderr,"%f len:%d purecount:%d\n",CMA,re[0].d->core.l_qseq,purecount);
+			CMA = (re[0].d->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
+			//fprintf(stderr,"%f len:%d purecount:%d\n",CMA,re[0].d->core.l_qseq,purecount);
+		}
 	}
 
 	if(mymapR.size()>0) {
-	   for(std::map<size_t,std::map<size_t,std::vector<reldata>>>::iterator it=mymapR.begin();it!=mymapR.end();it++) {
-	     std::vector<reldata> &re = it->second.rbegin()->second;
-	     if(nodupFP)
-	       assert(sam_write1(nodupFP, hdr,re[0].d));
-	     purecount++;
-	     CMA = (re[0].d->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
-	   }
+		for(std::map<size_t,std::map<size_t,std::vector<reldata>>>::iterator it=mymapR.begin();it!=mymapR.end();it++) {
+			std::vector<reldata> &re = it->second.rbegin()->second;
+			if(nodupFP)
+				assert(sam_write1(nodupFP, hdr,re[0].d));
+			purecount++;
+			CMA = (re[0].d->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
+		}
 	}
 
 }
@@ -747,7 +747,7 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
 
 int usage(FILE *fp, int is_long_help)
 {
-	//todo ideally decrease the number of params
+
 	fprintf(fp,
 			"\n"
 			"Usage: ./decluster [options] <in.bam>|<in.sam>|<in.cram> \n"
@@ -819,33 +819,34 @@ int usage(FILE *fp, int is_long_help)
 
 			// read filters
 			);
-	fprintf(fp,
-			"\nNotes:\n"
-			"\n"
-			"1. This program is useful for splitting a sorted bam/cram into two files\n"
-			"   1) file containing cluster duplicates\n"
-			"   2) file without any cluster duplicates, but including other kinds of duplicates\n"
-			"\n"
-			"  Example: \n"
-			"\t ./decluster input.bam -o outfiles -p 5000\n"
-			"\n"
-			"  Details:\n"
-			"  It loops  over input files, and reads with identical positions\n"
-			"  are assumed to be duplicates. It stratifes the duplicates over tiles and lanes\n"
-			"  and uses the euclidian distance (sqrt(da^2+db^2)) to 'find' clusters. Clusters being defined\n"
-			"  as a group of reads that are within pxdist to another read within the cluster\n"
-			"  program assumes read names (QNAME) look like: \'A00706:12:HGNY3DSXX:3:1110:11930:4867\'\n"
-			"  assuming \'discarded:discarded:discared:lanenumber:tileinfo:xpos:ypos\'\n"
-			"\n"
-			"  tileinfo is a 4 digit number including the identifiers for surface, swath and tile\n"
-			"  for given tileinfo 1234, 1=surface, 2=swath, 34=tile\n"
-			"	1			2		34\n"
-			"	-			-		--\n"
-			"	surface		swath	tile\n"
-			"\n"
-			"  For more details, see Illumina NovaSeq 6000 Sequencing System Guide \n"
-			"  Document #1000000019358v14 Material #20023471\n"
-			"\n\n");
+	if (is_long_help)
+		fprintf(fp,
+				"\nNotes:\n"
+				"\n"
+				"1. This program is useful for splitting a sorted bam/cram into two files\n"
+				"   1) file containing cluster duplicates\n"
+				"   2) file without any cluster duplicates, but including other kinds of duplicates\n"
+				"\n"
+				"  Example: \n"
+				"\t ./decluster input.bam -o outfiles -p 5000\n"
+				"\n"
+				"  Details:\n"
+				"  It loops  over input files, and reads with identical positions\n"
+				"  are assumed to be duplicates. It stratifes the duplicates over tiles and lanes\n"
+				"  and uses the euclidian distance (sqrt(da^2+db^2)) to 'find' clusters. Clusters being defined\n"
+				"  as a group of reads that are within pxdist to another read within the cluster\n"
+				"  program assumes read names (QNAME) look like: \'A00706:12:HGNY3DSXX:3:1110:11930:4867\'\n"
+				"  assuming \'discarded:discarded:discared:lanenumber:tileinfo:xpos:ypos\'\n"
+				"\n"
+				"  tileinfo is a 4 digit number including the identifiers for surface, swath and tile\n"
+				"  for given tileinfo 1234, 1=surface, 2=swath, 34=tile\n"
+				"	1			2		34\n"
+				"	-			-		--\n"
+				"	surface		swath	tile\n"
+				"\n"
+				"  For more details, see Illumina NovaSeq 6000 Sequencing System Guide \n"
+				"  Document #1000000019358v14 Material #20023471\n"
+				"\n\n");
 
 	return 0;
 }
@@ -890,7 +891,7 @@ void parse_platformconfig(char *fname){
 		strtok(NULL,"\n\t:");//flowcell
 		strtok(NULL,"\n\t:");//lane
 		//assuming swath tile counts are the same for all lanes
-		
+
 		int surf, swath,tile;
 		sscanf(strtok(NULL,"\n\t:"), "%1d%1d%2d", &surf, &swath, &tile);
 		maxswath=MAX(swath,maxswath);
@@ -905,7 +906,7 @@ void parse_platformconfig(char *fname){
 		maxy=MAX(maxy,ys);
 
 	}
-	
+
 
 	//assuming numbers start with 1; max observed value of tiles eq number of tiles
 	fprintf(stderr,
@@ -918,7 +919,7 @@ void parse_platformconfig(char *fname){
 			"\tNumber of swaths: %d\n"
 			"\tNumber of tiles: %d\n"
 			, minx, maxx, miny, maxy,maxx-minx, maxy-miny, maxswath,maxtile);
-		
+
 
 	delete [] mystr;
 	bam_destroy1(b);
@@ -1207,7 +1208,7 @@ int main(int argc, char **argv) {
 	for(int i=0;i<histogram_l;i++)
 		histogram[i] = 0;
 	//for(int i=1;i<histogram_l;i++)
-		//histogram[i] = 0;
+	//histogram[i] = 0;
 	double max_extrapolation = 1.0e10;
 	double step_size = 1e6;
 	size_t bootstraps = 100;
@@ -1247,7 +1248,7 @@ int main(int argc, char **argv) {
 	int aux_stats=0; //additional stats
 	char *histfile=NULL;
 	if(argc==1){
-		usage(stdout,0);
+		usage(stdout,1);
 		return 0;
 	}
 
@@ -1288,13 +1289,13 @@ int main(int argc, char **argv) {
 				lopts, &opt_index);
 
 		if (c == -1) break;
-		
-		
+
+
 		switch (c) {
 			case 0:
 				if (help_flag){   // '--help' appeared on command line
 					//fprintf(stdout,"\n\nHELP_FLAG\n\n");
-					return usage(stdout,0);
+					return usage(stdout,1);
 				}
 				if (conf_flag){
 					//fprintf(stdout,"\n\nCONF_FLAG\n\n");
@@ -1306,8 +1307,8 @@ int main(int argc, char **argv) {
 						return 0;
 
 					}
-					fprintf(stderr,"\t-> No input file specified\n");
 					return usage(stdout,0);
+					fprintf(stderr,"\t-> No input file specified\n");
 				}
 				//if opt sets a flag
 				if (lopts[opt_index].flag != 0)
@@ -1347,7 +1348,7 @@ int main(int argc, char **argv) {
 
 			case '?':
 					  if (optopt == '?') {  // '-?' appeared on command line
-						  return usage(stdout,0);
+						  return usage(stdout,1);
 					  } else {
 						  if (optopt) { // Bad short option
 							  fprintf(stdout,"./decluster invalid option -- '%c'\n", optopt);
@@ -1370,20 +1371,20 @@ int main(int argc, char **argv) {
 	}
 	if (help_flag){   // '--help' appeared on command line
 		fprintf(stdout,"\n\nHELP_FLAG\n\n");
-		return usage(stdout,0);
+		return usage(stdout,1);
 	}
 	if(optind<argc)
 		fname = strdup(argv[optind]);
 
 	if(!fname&&!histfile){
-		fprintf(stderr,"\t-> No input file specified\n");
 		usage(stdout,0);
+		fprintf(stderr,"\t-> No input file specified\n");
 		return 0;
 	}
 
 	if(!fn_out){
-		fprintf(stderr,"\t-> No output file specified; use `-o outfile`\n");
 		usage(stdout,0);
+		fprintf(stderr,"\t-> No output file specified; use `-o outfile`\n");
 		return 0;
 	}
 
@@ -1447,7 +1448,7 @@ int main(int argc, char **argv) {
 			last=i;
 	std::vector<double> to_preseq;
 	for(int i=0;i<=last;i++){
-	//for(int i=1;i<=last;i++){
+		//for(int i=1;i<=last;i++){
 
 		if(i)
 			fprintf(fphist,"%d\t%lu\n",i,histogram[i]);
@@ -1480,5 +1481,5 @@ int main(int argc, char **argv) {
 	fclose(fp);
 	delete [] histogram;
 	return 0;
-}
+	}
 
