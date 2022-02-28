@@ -420,6 +420,9 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 		in = it->second.begin();
 		std::vector<reldata> &rd=in->second;
 		if(rd.size()==1){
+			dcount++;
+            counter.push_back(dcount);
+            dcount=0;
 			if(fp)
 				assert(sam_write1(fp, hdr,rd[0].d)>=0);
 			continue;
@@ -436,6 +439,8 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 			if(rd.size()==1){
 				pcrdups++;
 				dcount++;
+                counter.push_back(dcount);
+                dcount=0;
 
 				if(fp)
 					assert(sam_write1(fp, hdr,rd[0].d)>=0);
@@ -1460,8 +1465,6 @@ int main(int argc, char **argv) {
 
 
 	if(!stats_nopreseq){
-		//int lc_extrap(std::vector<double> &counts_hist,char *nam,double max_extrapolation, double step_size, size_t bootstraps, double c_level,size_t orig_max_terms, int DEFECTS,int VERBOSE, unsigned long int seed);
-		//lc_extrap(to_preseq,onamtable,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed);
 		int lc_extrap(std::vector<double> &counts_hist,char *nam, char *nam_d,double max_extrapolation, double step_size, size_t bootstraps, double c_level,size_t orig_max_terms, int DEFECTS,int VERBOSE, unsigned long int seed);
 		lc_extrap(to_preseq,onamtable,onamtable2,max_extrapolation,step_size,bootstraps,c_level,orig_max_terms,DEFECTS,VERBOSE,seed);
 	}
