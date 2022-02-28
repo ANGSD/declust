@@ -51,15 +51,15 @@ endif
 clean:	
 	rm  -f decluster *.o *.d
 
-
-testbams := $(wildcard tests/test*bam)
+testbams := $(wildcard tests/test*sam)
 
 test: $(testbams)
 	for bam in $(testbams); do \
-		./decluster -0 -w $${bam} -o $${bam%.bam}.test 2> $${bam%.bam}.log; \
-		diff $${bam%.bam}.test.hist.txt $${bam%.bam}.expected.hist.txt; \
-		bash -v -c "diff <(sed 1d $${bam%.bam}.test.dupstat.txt) <(sed 1d $${bam%.bam}.expected.dupstat.txt)"; \
+		./decluster -0 -w $${bam} -o $${bam%.sam}.test 2> $${bam%.sam}.log; \
+		diff $${bam%.sam}.test.hist.txt $${bam%.sam}.expected.hist.txt; \
+		bash -v -c "diff <(sed 1d $${bam%.sam}.test.dupstat.txt) <(sed 1d $${bam%.sam}.expected.dupstat.txt)"; \
 	done
 
 cleantest:
 	rm -v tests/*.test* tests/*.log tests/*bamin.test* tests/*histin.test*
+

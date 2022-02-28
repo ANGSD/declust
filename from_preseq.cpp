@@ -307,14 +307,6 @@ void resample_hist(const vector<size_t> &orig_hist_bins,
 #endif
 }
 
-//void
-//extrap_bootstrap(const bool VERBOSE, const bool DEFECTS,
-//const unsigned long int seed,
-//const vector<double> &orig_hist,
-//const size_t bootstraps, const size_t orig_max_terms,
-//const int diagonal, const double bin_step_size,
-//const double max_extrapolation, const size_t max_iter,
-//vector< vector<double> > &bootstrap_estimates) {
 void
 extrap_bootstrap(const bool VERBOSE, int DEFECTS,
 		const unsigned long int seed,
@@ -384,59 +376,37 @@ extrap_bootstrap(const bool VERBOSE, int DEFECTS,
 		// max_terms)
 		max_terms = max_terms - (max_terms % 2 == 1);
 
-		// defect mode, simple extrapolation
-		if(DEFECTS){
-			vector<double> ps_coeffs;
-			for (size_t j = 1; j <= max_terms; j++)
-				ps_coeffs.push_back(outhist[j]*std::pow((double)(-1), (int)(j + 1)) );
+        //refit curve for lower bound
+        const ContinuedFractionApproximation
+            lower_cfa(diagonal, max_terms);
 
-			const ContinuedFraction
-				defect_cf(ps_coeffs, diagonal, max_terms);
+        const ContinuedFraction
+            lower_cf(lower_cfa.optimal_cont_frac_distinct(outhist));
 
-			double sample_size = static_cast<double>(sample);
-			while(sample_size < max_extrapolation){
-				double t = (sample_size - sample_vals_sum)/sample_vals_sum;
-				assert(t >= 0.0);
-				yield_vector.push_back(initial_distinct + t*defect_cf(t));
-				sample_size += bin_step_size;
-			}
-			// no checking of curve in defect mode
-			bootstrap_estimates.push_back(yield_vector);
-			if (VERBOSE) cerr << '.';
-		}
-		else{
-			//refit curve for lower bound
-			const ContinuedFractionApproximation
-				lower_cfa(diagonal, max_terms);
+        //extrapolate the curve start
+        if (lower_cf.is_valid()){
+            double sample_size = static_cast<double>(sample);
+            while(sample_size < max_extrapolation){
+                double t = (sample_size - sample_vals_sum)/sample_vals_sum;
+                assert(t >= 0.0);
+                yield_vector.push_back(initial_distinct + t*lower_cf(t));
+                sample_size += bin_step_size;
+            }
 
-			const ContinuedFraction
-				lower_cf(lower_cfa.optimal_cont_frac_distinct(outhist));
+            // SANITY CHECK
+            if (check_yield_estimates(yield_vector)) {
+                bootstrap_estimates.push_back(yield_vector);
+                if (VERBOSE) cerr << '.';
+            }
+            else if (VERBOSE){
+                cerr << "_";
+            }
+        }
+        else if (VERBOSE){
+            cerr << "_";
+        }
 
-			//extrapolate the curve start
-			if (lower_cf.is_valid()){
-				double sample_size = static_cast<double>(sample);
-				while(sample_size < max_extrapolation){
-					double t = (sample_size - sample_vals_sum)/sample_vals_sum;
-					assert(t >= 0.0);
-					yield_vector.push_back(initial_distinct + t*lower_cf(t));
-					sample_size += bin_step_size;
-				}
-
-				// SANITY CHECK
-				if (check_yield_estimates(yield_vector)) {
-					bootstrap_estimates.push_back(yield_vector);
-					if (VERBOSE) cerr << '.';
-				}
-				else if (VERBOSE){
-					cerr << "_";
-				}
-			}
-			else if (VERBOSE){
-				cerr << "_";
-			}
-
-		}
-	}
+    }
 	if (VERBOSE)
 		cerr << endl;
 	if (bootstrap_estimates.size() < bootstraps)
@@ -699,17 +669,19 @@ int lc_extrap(vector<double> &counts_hist,char *nam, char *nam_d, double max_ext
 	// check to make sure library is not overly saturated
 	const double two_fold_extrap = GoodToulmin2xExtrap(counts_hist);
 	if(two_fold_extrap < 0.0){
-		fprintf(stderr,"Library expected to saturate in doubling of "
-				"size, unable to extrapolate");
+		fprintf(stderr,"\n[ERROR]\tLibrary expected to saturate in doubling of "
+				"size, unable to extrapolate\n");
 		return 0;
 	}
 
 
 	// catch if all reads are distinct
-	if (orig_max_terms < MIN_REQUIRED_COUNTS)
-		fprintf(stderr,"max count before zero is les than min required "
+	if (orig_max_terms < MIN_REQUIRED_COUNTS){
+		fprintf(stderr,"\n[ERROR]\tmax count before zero is les than min required "
 				"count (4), sample not sufficiently deep or "
-				"duplicates removed");
+				"duplicates removed\n");
+		return 0;
+    }
 
 	/////////////////////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////////////////
