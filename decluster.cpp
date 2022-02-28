@@ -421,6 +421,8 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 		std::vector<reldata> &rd=in->second;
 		if(rd.size()==1){
 			dcount++;
+            counter.push_back(dcount);
+            dcount=0;
 			if(fp)
 				assert(sam_write1(fp, hdr,rd[0].d)>=0);
 			continue;
@@ -437,6 +439,8 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 			if(rd.size()==1){
 				pcrdups++;
 				dcount++;
+                counter.push_back(dcount);
+                dcount=0;
 
 				if(fp)
 					assert(sam_write1(fp, hdr,rd[0].d)>=0);
