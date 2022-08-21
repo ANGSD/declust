@@ -355,7 +355,7 @@ void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1
 		}
 	}
 	//DEBUG
-	//fprintf(stderr,"surface:%d, swath:%d, tile:%d, libid:%d lane:%d rlen:%d xs:%d ys:%d\n",surf,swath,tile,libid,lane,b->core.l_qseq,point.xs,point.ys);
+	fprintf(stderr,"surface:%d, swath:%d, tile:%d, libid:%d lane:%d rlen:%d xs:%d ys:%d\n",surf,swath,tile,libid,lane,b->core.l_qseq,point.xs,point.ys);
 
 	// 
 	// given tile id 1234
@@ -370,6 +370,11 @@ void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1
 
 	size_t key2=surf;
 	key2 += lane*1e1;
+
+	if (! strcmp(coordtype,"l") || ! strcmp(coordtype,"local") ){
+		key2 += swath*1e2;
+		key2 += tile*1e4;
+	}
 
 	//mymap is the outer map
 	//fprintf(stderr,"\nkey:%d, key2:%d surface:%d, swath:%d, tile:%d, libid:%d lane:%d rlen:%d xs:%d ys:%d\n----\n\n",key,key2,surf,swath,tile,libid,lane,b->core.l_qseq,point.xs,point.ys);
