@@ -20,7 +20,6 @@
 #include <iostream>
 #include <sys/types.h>
 #include <unistd.h>
-#include <cassert>
 
 #ifdef __WITH_GSL__
 #include <gsl/gsl_cdf.h>
@@ -32,6 +31,7 @@
 #endif
 
 #include "continued_fraction.hpp"
+#include "decluster.h"
 
 #ifdef __WITH_GSL__
 gsl_rng *rng = NULL;
@@ -117,7 +117,7 @@ median_and_ci(const vector<double> &estimates,
 		double &median_estimate,
 		double &lower_ci_estimate,
 		double &upper_ci_estimate){
-	assert(!estimates.empty());
+	ASSERT(!estimates.empty());
 	const double alpha = 1.0 - ci_level;
 	const size_t n_est = estimates.size();
 	vector<double> sorted_estimates(estimates);
@@ -145,7 +145,7 @@ vector_median_and_ci(const vector<vector<double> > &bootstrap_estimates,
 	yield_estimates.clear();
 	lower_ci_lognormal.clear();
 	upper_ci_lognormal.clear();
-	assert(!bootstrap_estimates.empty());
+	ASSERT(!bootstrap_estimates.empty());
 
 	const size_t n_est = bootstrap_estimates.size();
 	vector<double> estimates_row(bootstrap_estimates.size(), 0.0);
@@ -388,7 +388,7 @@ extrap_bootstrap(const bool VERBOSE, int DEFECTS,
             double sample_size = static_cast<double>(sample);
             while(sample_size < max_extrapolation){
                 double t = (sample_size - sample_vals_sum)/sample_vals_sum;
-                assert(t >= 0.0);
+                ASSERT(t >= 0.0);
                 yield_vector.push_back(initial_distinct + t*lower_cf(t));
                 sample_size += bin_step_size;
             }
@@ -510,7 +510,7 @@ void extrap_bootstrap_d(const bool VERBOSE, int DEFECTS,
 		double sample_size_d = static_cast<double>(sample_d);
 		while(sample_size_d < max_extrapolation){
 			double t = (sample_size_d - sample_vals_sum_d)/sample_vals_sum_d;
-			assert(t >= 0.0);
+			ASSERT(t >= 0.0);
 			yield_vector_d.push_back(initial_distinct + t*defect_cf(t));
 			sample_size_d += bin_step_size;
 		}
@@ -572,7 +572,7 @@ void extrap_bootstrap_d(const bool VERBOSE, int DEFECTS,
 			double sample_size = static_cast<double>(sample);
 			while(sample_size < max_extrapolation){
 				double t = (sample_size - sample_vals_sum)/sample_vals_sum;
-				assert(t >= 0.0);
+				ASSERT(t >= 0.0);
 				yield_vector.push_back(initial_distinct + t*lower_cf(t));
 				sample_size += bin_step_size;
 			}
@@ -681,7 +681,7 @@ int lc_extrap(vector<double> &counts_hist,char *nam, char *nam_d, double max_ext
 				"count (4), sample not sufficiently deep or "
 				"duplicates removed\n");
 		return 0;
-    }
+	}
 
 	/////////////////////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////////////////

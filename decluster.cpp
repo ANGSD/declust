@@ -2,7 +2,6 @@
 #include <htslib/hts.h>
 #include <htslib/sam.h>
 #include <htslib/thread_pool.h>
-#include <cassert>
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
@@ -12,6 +11,8 @@
 #include <getopt.h>
 #include <ctime>
 #include <math.h>
+
+#include "decluster.h"
 
 #ifndef MIN
 #define MIN(a,b) ((a)<(b)?(a):(b))
@@ -314,7 +315,7 @@ void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1
 	point.d=b;
 
 	mystr = strncpy(mystr,bam_get_qname(b),2048);
-	//    fprintf(stderr,"mystr: \'%s\'\n",mystr);
+	   // fprintf(stderr,"mystr: \'%s\'\n",mystr);
 	strtok(mystr,"\n\t:");//machine
 	strtok(NULL,"\n\t:");//runname
 	strtok(NULL,"\n\t:");//flowcell
@@ -323,13 +324,18 @@ void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1
 
 	int surf, swath,tile;
 	sscanf(strtok(NULL,"\n\t:"), "%1d%1d%2d", &surf, &swath, &tile);
-	//fprintf(stderr,"\n\n%d %d %d\n\n",surf, swath, tile);
+
+
+#if 0
+	fprintf(stderr,"->->->%d %d %d\n\n",surf, swath, tile);
+#endif
 
 
 
 	if( ! strcmp(coordtype,"g") || ! strcmp(coordtype,"global") ){ 
 		point.xs = globalX(atoi(strtok(NULL,"\n\t:")),xLength,swath);
 		point.ys = globalY(atoi(strtok(NULL,"\n\t:")),yLength,nTiles,tile);
+// fprintf(stderr,"\n\npoint.xs point.ys!!!%d %d\n\n",point.xs,point.ys);
 	}else if (! strcmp(coordtype,"l") || ! strcmp(coordtype,"local") ){
 		point.xs = atoi(strtok(NULL,"\n\t:"));
 		point.ys = atoi(strtok(NULL,"\n\t:"));
@@ -354,8 +360,10 @@ void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1
 
 		}
 	}
-	//DEBUG
-	// fprintf(stderr,"surface:%d, swath:%d, tile:%d, libid:%d lane:%d rlen:%d xs:%d ys:%d\n",surf,swath,tile,libid,lane,b->core.l_qseq,point.xs,point.ys);
+
+#if 0
+	fprintf(stderr,"surface:%d, swath:%d, tile:%d, libid:%d lane:%d rlen:%d xs:%d ys:%d\n",surf,swath,tile,libid,lane,b->core.l_qseq,point.xs,point.ys);
+#endif
 
 	// 
 	// given tile id 1234
@@ -377,7 +385,9 @@ void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1
 	}
 
 	//mymap is the outer map
-	//fprintf(stderr,"\nkey:%d, key2:%d surface:%d, swath:%d, tile:%d, libid:%d lane:%d rlen:%d xs:%d ys:%d\n----\n\n",key,key2,surf,swath,tile,libid,lane,b->core.l_qseq,point.xs,point.ys);
+#if 0
+	fprintf(stderr,"\nkey:%d, key2:%d surface:%d, swath:%d, tile:%d, libid:%d lane:%d rlen:%d xs:%d ys:%d\n----\n\n",key,key2,surf,swath,tile,libid,lane,b->core.l_qseq,point.xs,point.ys);
+#endif
 	std::map<size_t,std::map<size_t, std::vector<reldata>>>::iterator it= mymap.find(key);
 	//key not found
 	if(it==mymap.end()){
@@ -412,6 +422,7 @@ void plugin(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam1
 void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam_hdr_t *hdr, samFile *fp, samFile *fp2,std::vector<size_t> &counter){
 
 
+	int n_readlen=0;
 	size_t dcount;
 	int plug=0;
 	for(std::map<size_t,std::map<size_t,std::vector<reldata> >>::iterator it=mymap.begin();it!=mymap.end();it++) {
@@ -419,43 +430,51 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 		//|__ same read length
 		// same mapping position is already a requirement before plugout is called
 
-		//dcount= duplicate fragment count, to give preseq
+		//dcount= observed fragment count, to give preseq
+		// NB this also includes non duplicates
 		dcount=0;
 		std::map<size_t,std::vector<reldata>>::iterator in;
 		in = it->second.begin();
-		std::vector<reldata> &rd=in->second;
-		if(rd.size()==1){
-			dcount++;
-            counter.push_back(dcount);
-            dcount=0;
-			if(fp)
-				assert(sam_write1(fp, hdr,rd[0].d)>=0);
-			continue;
-		}
+		std::vector<reldata> &rd_out=in->second;
+
+
 		for (in = it->second.begin();in !=it->second.end();++in){
 			//inner iteration:
 			//|__ same surface+same lane
 
 			std::vector<reldata> &rd=in->second;
-			totaldups+=rd.size();
 			//just a  duplicate alone in a SURFACE+LANE pair
 			//first it came with its family
 			//but it is alone now because he has a unique length
 			if(rd.size()==1){
+
+				if(rd_out.size()==1){
+					dcount++;
+					if(fp){
+						ASSERT(sam_write1(fp, hdr,rd_out[0].d)>=0);
+					}
+					continue;
+				}
+
+				totaldups+=rd.size();
+
 				pcrdups++;
 				dcount++;
                 counter.push_back(dcount);
                 dcount=0;
 
-				if(fp)
-					assert(sam_write1(fp, hdr,rd[0].d)>=0);
+				if(fp){
+					ASSERT(sam_write1(fp, hdr,rd[0].d)>=0);
+				}
 				continue;
 			}
 
 
+			totaldups+=rd.size();
 #if 0
-			for(int i=0;i<rd.size();i++)
+			for(int i=0;i<rd.size();i++){
 				fprintf(stderr,"\tcc key: out %lu in %lu/%lu val: xs:%d ys:%d pos:%d\n",it->first,in->first,rd.size(),rd[i].xs,rd[i].ys,rd[i].d->core.pos+1);
+			}
 #endif
 
 
@@ -470,8 +489,8 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 					dcount+=2;
 					pcrdups+=2 ;
 					if(fp){
-						assert(sam_write1(fp, hdr,rd[0].d)>=0);      
-						assert(sam_write1(fp, hdr,rd[1].d)>=0);
+						ASSERT(sam_write1(fp, hdr,rd[0].d)>=0);      
+						ASSERT(sam_write1(fp, hdr,rd[1].d)>=0);
 					}
 				}else{
 					//same cluster
@@ -481,12 +500,13 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 					pcrdups++;
 
 					clustdups++ ;
-					if(fp)
-						assert(sam_write1(fp, hdr,rd[0].d)>=0);
+					if(fp){
+						ASSERT(sam_write1(fp, hdr,rd[0].d)>=0);
+					}
 					if(fp2){
 						//there are two reads in the cluster in total
-						assert(sam_write1(fp2, hdr,rd[0].d)>=0);
-						assert(sam_write1(fp2, hdr,rd[1].d)>=0);
+						ASSERT(sam_write1(fp2, hdr,rd[0].d)>=0);
+						ASSERT(sam_write1(fp2, hdr,rd[1].d)>=0);
 					}
 				}
 				continue;
@@ -509,9 +529,9 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 					pcrdups +=3 ;
 
 					if(fp){
-						assert(sam_write1(fp, hdr,rd[0].d)>=0);      
-						assert(sam_write1(fp, hdr,rd[1].d)>=0);
-						assert(sam_write1(fp, hdr,rd[2].d)>=0);
+						ASSERT(sam_write1(fp, hdr,rd[0].d)>=0);      
+						ASSERT(sam_write1(fp, hdr,rd[1].d)>=0);
+						ASSERT(sam_write1(fp, hdr,rd[2].d)>=0);
 					}
 				}else if (val>=2){
 					// 3 reads form a cluster
@@ -519,12 +539,13 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 					dcount++;
 					pcrdups++;
 					clustdups+=2 ;
-					if(fp)
-						assert(sam_write1(fp, hdr,rd[0].d)>=0);
+					if(fp){
+						ASSERT(sam_write1(fp, hdr,rd[0].d)>=0);
+					}
 					if(fp2){
-						assert(sam_write1(fp2, hdr,rd[0].d)>=0);
-						assert(sam_write1(fp2, hdr,rd[1].d)>=0);
-						assert(sam_write1(fp2, hdr,rd[2].d)>=0);
+						ASSERT(sam_write1(fp2, hdr,rd[0].d)>=0);
+						ASSERT(sam_write1(fp2, hdr,rd[1].d)>=0);
+						ASSERT(sam_write1(fp2, hdr,rd[2].d)>=0);
 					}
 				}else if (val==1){
 					//2 in cluster one outside
@@ -536,34 +557,34 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 					if(d01<pxdist){
 						//rd0 and rd1 defines a cluster, rd2 outside
 						if(fp){
-							assert(sam_write1(fp, hdr,rd[0].d)>=0);
-							assert(sam_write1(fp, hdr,rd[2].d)>=0);
+							ASSERT(sam_write1(fp, hdr,rd[0].d)>=0);
+							ASSERT(sam_write1(fp, hdr,rd[2].d)>=0);
 						}
 						if(fp2){
-							assert(sam_write1(fp2, hdr,rd[0].d)>=0);
-							assert(sam_write1(fp2, hdr,rd[1].d)>=0);
+							ASSERT(sam_write1(fp2, hdr,rd[0].d)>=0);
+							ASSERT(sam_write1(fp2, hdr,rd[1].d)>=0);
 						}
 					}
 					else if(d02<pxdist){
 						//rd0 and rd2 defines a cluster, rd1 outside
 						if(fp){
-							assert(sam_write1(fp, hdr,rd[0].d)>=0);
-							assert(sam_write1(fp, hdr,rd[1].d)>=0);
+							ASSERT(sam_write1(fp, hdr,rd[0].d)>=0);
+							ASSERT(sam_write1(fp, hdr,rd[1].d)>=0);
 						}
 						if(fp2){
-							assert(sam_write1(fp2, hdr,rd[0].d)>=0);
-							assert(sam_write1(fp2, hdr,rd[2].d)>=0);
+							ASSERT(sam_write1(fp2, hdr,rd[0].d)>=0);
+							ASSERT(sam_write1(fp2, hdr,rd[2].d)>=0);
 						}
 					}
 					else if(d12<pxdist){
 						//rd1 and rd2 defines a cluster, rd0 outside
 						if(fp){
-							assert(sam_write1(fp, hdr,rd[0].d)>=0);
-							assert(sam_write1(fp, hdr,rd[1].d)>=0);
+							ASSERT(sam_write1(fp, hdr,rd[0].d)>=0);
+							ASSERT(sam_write1(fp, hdr,rd[1].d)>=0);
 						}
 						if(fp2){
-							assert(sam_write1(fp2, hdr,rd[1].d)>=0);
-							assert(sam_write1(fp2, hdr,rd[2].d)>=0);
+							ASSERT(sam_write1(fp2, hdr,rd[1].d)>=0);
+							ASSERT(sam_write1(fp2, hdr,rd[2].d)>=0);
 						}
 					}else{
 						fprintf(stderr,"never happens\n");
@@ -663,7 +684,7 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 					dcount++;
 
 					if(fp)
-						assert(sam_write1(fp, hdr,rd[tmp[0]].d)>=0);
+						ASSERT(sam_write1(fp, hdr,rd[tmp[0]].d)>=0);
 
 
 					for(int j=0;j<tmp.size();j++){
@@ -671,19 +692,19 @@ void plugout(std::map<size_t,std::map<size_t,std::vector<reldata> >> &mymap, bam
 						if(j) 
 							clustdups++;
 						if(fp2)
-							assert(sam_write1(fp2, hdr,rd[tmp[j]].d)>=0);
+							ASSERT(sam_write1(fp2, hdr,rd[tmp[j]].d)>=0);
 					}
 				}
 			}
 		}
+
+
 		counter.push_back(dcount);
 		dcount=0;
 	}
 }
 
 void printmap(FILE *fp,std::map<size_t,std::vector<reldata> > &mymap){
-	//why if 1?
-#if 1
 	fprintf(fp,"std::map.size:%lu\n",mymap.size());
 	for(std::map<size_t,std::vector<reldata> >::iterator it=mymap.begin();it!=mymap.end();it++){
 		fprintf(fp,"key:%lu\n",it->first);
@@ -691,12 +712,11 @@ void printmap(FILE *fp,std::map<size_t,std::vector<reldata> > &mymap){
 		for(int i=0;i<rd.size();i++)
 			fprintf(fp,"\tval: xs:%ld ys:%ld\n",rd[i].xs,rd[i].ys);
 	}
-#endif
 }
 
 void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupFP, char *coordtype, int xLength, int yLength, int nTiles){
 
-	//  fprintf(stderr,"do_magic queue->l:%d queue->m:%d chr:%d pos:%ld\n",q->l,q->m,q->d[0]->core.tid,q->d[0]->core.pos);
+	 // fprintf(stderr,"do_magic queue->l:%d queue->m:%d chr:%d pos:%ld\n",q->l,q->m,q->d[0]->core.tid,q->d[0]->core.pos);
 	//fprintf(stderr,"@@@@@@info\t%d\t%d\n",q->d[0]->core.pos+1,q->l);
 	//totaldups += q->l -1;
 
@@ -710,13 +730,14 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
 		b = q->d[i];
 		if(0&&!(b->core.flag &BAM_FDUP)){//never do this,
 			if(fp)
-				assert(sam_write1(fp, hdr,b)>=0);
+				ASSERT(sam_write1(fp, hdr,b)>=0);
 			continue;
 		}
-		if(bam_is_rev(b))
+		if(bam_is_rev(b)){
 			plugin(mymapR,b,hdr,coordtype,xLength,yLength,nTiles);
-		else
+		}else{
 			plugin(mymapF,b,hdr,coordtype,xLength,yLength,nTiles);
+		}
 	}
 
 	std::vector<size_t> counter;
@@ -729,12 +750,12 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
 	}
 
 
-	//assert(sam_write1(fp3, hdr, q->d[lrand48() %q->l])>=0); //<- this one prints a random read as the represent of the dups
+	//ASSERT(sam_write1(fp3, hdr, q->d[lrand48() %q->l])>=0); //<- this one prints a random read as the represent of the dups
 	if(mymapF.size()>0){
 		for(std::map<size_t,std::map<size_t,std::vector<reldata>>>::iterator it=mymapF.begin();it!=mymapF.end();it++){
 			std::vector<reldata> &re = it->second.rbegin()->second;
 			if(nodupFP)
-				assert(sam_write1(nodupFP, hdr,re[0].d));
+				ASSERT(sam_write1(nodupFP, hdr,re[0].d));
 			purecount++;
 			//    fprintf(stderr,"%f len:%d purecount:%d\n",CMA,re[0].d->core.l_qseq,purecount);
 			CMA = (re[0].d->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
@@ -746,7 +767,7 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
 		for(std::map<size_t,std::map<size_t,std::vector<reldata>>>::iterator it=mymapR.begin();it!=mymapR.end();it++) {
 			std::vector<reldata> &re = it->second.rbegin()->second;
 			if(nodupFP)
-				assert(sam_write1(nodupFP, hdr,re[0].d));
+				ASSERT(sam_write1(nodupFP, hdr,re[0].d));
 			purecount++;
 			CMA = (re[0].d->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
 		}
@@ -1019,9 +1040,9 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 	queue_t *queue = init_queue_t(nreads_per_pos);  
 	bam_hdr_t  *hdr = sam_hdr_read(in);
 	if(stats_only==0){
-		assert(sam_hdr_write(out, hdr) == 0);
-		assert(sam_hdr_write(out2, hdr) == 0);
-		assert(sam_hdr_write(nodupFP, hdr) == 0);
+		ASSERT(sam_hdr_write(out, hdr) == 0);
+		ASSERT(sam_hdr_write(out2, hdr) == 0);
+		ASSERT(sam_hdr_write(nodupFP, hdr) == 0);
 	}
 
 	purecount=0;
@@ -1082,10 +1103,12 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 		}
 		if(queue->l==1 && queue->d[0]->core.pos!=b->core.pos){
 			histogram[1]++;
-			if(out)
-				assert(sam_write1(out, hdr, queue->d[0])>=0); //write into the file containing the pcrdups+normal reads
-			if(nodupFP)
-				assert(sam_write1(nodupFP, hdr, queue->d[0])>=0);//<- writeinto the file without any dups
+			if(out){
+				ASSERT(sam_write1(out, hdr, queue->d[0])>=0); //write into the file containing the pcrdups+normal reads
+			}
+			if(nodupFP){
+				ASSERT(sam_write1(nodupFP, hdr, queue->d[0])>=0);//<- writeinto the file without any dups
+			}
 			purecount++;
 			CMA = (queue->d[0]->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
 			queue->l =0;
@@ -1097,18 +1120,19 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 			queue->l =0;
 		}
 
-		if(queue->l==queue->m)
+		if(queue->l==queue->m){
 			realloc_queue(queue);
+		}
 
-		assert(bam_copy1(queue->d[queue->l++],b)!=NULL);
+		ASSERT(bam_copy1(queue->d[queue->l++],b)!=NULL);
 	}
 
 	if(queue->l==1){
 		histogram[1]++;
 		if(out)
-			assert(sam_write1(out, hdr, queue->d[0])>=0); //write into the file containing the pcrdups+normal reads
+			ASSERT(sam_write1(out, hdr, queue->d[0])>=0); //write into the file containing the pcrdups+normal reads
 		if(nodupFP)
-			assert(sam_write1(nodupFP, hdr, queue->d[0])>=0);//<- writeinto the file without any dups
+			ASSERT(sam_write1(nodupFP, hdr, queue->d[0])>=0);//<- writeinto the file without any dups
 		purecount++;
 		CMA = (queue->d[0]->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
 	}else{
@@ -1116,14 +1140,18 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 		do_magic(queue,hdr,out,out2,nodupFP,coordtype,xLength, yLength, nTiles);
 	}
 	queue->l=0;
-	if(out)
-		assert(sam_close(out)==0);
-	if(out2)
-		assert(sam_close(out2)==0);
-	if(nodupFP)
-		assert(sam_close(nodupFP)==0);
-	if(in)
-		assert(sam_close(in)==0);
+	if(out){
+		ASSERT(sam_close(out)==0);
+	}
+	if(out2){
+		ASSERT(sam_close(out2)==0);
+	}
+	if(nodupFP){
+		ASSERT(sam_close(nodupFP)==0);
+	}
+	if(in){
+		ASSERT(sam_close(in)==0);
+	}
 	for(int i=0;i<queue->m;i++)
 		bam_destroy1(queue->d[i]);
 
@@ -1436,7 +1464,7 @@ int main(int argc, char **argv) {
 	if(histfile){
 		FILE *histfile_fp = NULL;
 		histfile_fp = fopen(histfile,"rb");
-		assert(histfile_fp);
+		ASSERT(histfile_fp);
 		char histbuf[4096];
 		while(fgets(histbuf,4096,histfile_fp)){
 			size_t bin = atol(strtok(histbuf,"\t\t\n "));
