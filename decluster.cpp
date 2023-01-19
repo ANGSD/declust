@@ -969,23 +969,28 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 	samFile *out=NULL;
 	samFile *out2=NULL;
 	samFile *nodupFP=NULL;
+	samFile *out5=NULL;
 
 	char onam1[2048]="";
 	char onam2[2048]="";
 	char onam4[2048]="";
+	char onam5[2048]="";
 
 	strcat(onam1,fn_out);
 	strcat(onam2,fn_out);
 	strcat(onam4,fn_out);
+	strcat(onam5,fn_out);
 
 	if(out_mode[1]=='b'){
 		strcat(onam1,".noClusterDup.bam");
 		strcat(onam2,".clusterDupAssoc.bam");
 		strcat(onam4,".noDup.bam");
+		strcat(onam5,".dupAssoc.bam");
 	}else{
 		strcat(onam1,".noClusterDup.cram");
 		strcat(onam2,".clusterDupAssoc.cram");
 		strcat(onam4,".noDup.cram");
+		strcat(onam5,".dupAssoc.cram");
 	}
 
 	if(refName){
@@ -1026,6 +1031,11 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 			exit(0);
 		}
 
+		if ((out5 = sam_open_format(onam5, out_mode, dingding2)) == 0) {
+		  fprintf(stderr,"Error opening file: '%s' for writing\n",onam5);
+		  exit(0);
+		}
+
 		if(nthreads>1){
 			if (!(p.pool = hts_tpool_init(nthreads))) {
 				fprintf(stderr, "Error creating thread pool\n");
@@ -1034,6 +1044,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 			hts_set_opt(in,  HTS_OPT_THREAD_POOL, &p);
 			if (out) hts_set_opt(out, HTS_OPT_THREAD_POOL, &p);
 			if (out2) hts_set_opt(out2, HTS_OPT_THREAD_POOL, &p);
+			if (out5) hts_set_opt(out5, HTS_OPT_THREAD_POOL, &p);
 		}
 	}
 
@@ -1042,6 +1053,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 	if(stats_only==0){
 		ASSERT(sam_hdr_write(out, hdr) == 0);
 		ASSERT(sam_hdr_write(out2, hdr) == 0);
+		ASSERT(sam_hdr_write(out5, hdr) == 0);
 		ASSERT(sam_hdr_write(nodupFP, hdr) == 0);
 	}
 
@@ -1144,8 +1156,10 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 		ASSERT(sam_close(out)==0);
 	}
 	if(out2){
-		ASSERT(sam_close(out2)==0);
+	  ASSERT(sam_close(out2)==0);
 	}
+	if(out2)
+	  ASSERT(sam_close(out5)==0);
 	if(nodupFP){
 		ASSERT(sam_close(nodupFP)==0);
 	}
@@ -1167,7 +1181,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 	hts_opt_free((hts_opt *)dingding2->specific);
 	free(dingding2);
 	if(stats_only==0)
-		fprintf(stderr,"    Dumpingfiles:\t\'%s\'\n\t\t\t\'%s\'\n\t\t\t\'%s\'\n\t\t\t\'%s\'\n",onam1,onam2,onam3,onam4);
+	  fprintf(stderr,"    Dumpingfiles:\t\'%s\'\n\t\t\t\'%s\'\n\t\t\t\'%s\'\n\t\t\t\'%s\'\n\t\t\t'%s\n",onam1,onam2,onam3,onam4,onam5);
 	else
 		fprintf(stderr,"    Dumpingfiles:\t\'%s\'\n",onam3);
 
