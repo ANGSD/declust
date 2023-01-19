@@ -979,13 +979,13 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 	strcat(onam4,fn_out);
 
 	if(out_mode[1]=='b'){
-		strcat(onam1,".noClusterDuplicates.bam");
-		strcat(onam2,".onlyClusterDuplicates.bam");
-		strcat(onam4,".pure.bam");
+		strcat(onam1,".noClusterDup.bam");
+		strcat(onam2,".clusterDupAssoc.bam");
+		strcat(onam4,".noDup.bam");
 	}else{
-		strcat(onam1,".noClusterDuplicates.cram");
-		strcat(onam2,".onlyClusterDuplicates.cram");
-		strcat(onam4,".pure.cram");
+		strcat(onam1,".noClusterDup.cram");
+		strcat(onam2,".clusterDupAssoc.cram");
+		strcat(onam4,".noDup.cram");
 	}
 
 	if(refName){
