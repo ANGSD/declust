@@ -714,8 +714,7 @@ void printmap(FILE *fp,std::map<size_t,std::vector<reldata> > &mymap){
 	}
 }
 
-void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupFP, char *coordtype, int xLength, int yLength, int nTiles){
-
+void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupFP, char *coordtype, int xLength, int yLength, int nTiles,samFile *out5){
 	 // fprintf(stderr,"do_magic queue->l:%d queue->m:%d chr:%d pos:%ld\n",q->l,q->m,q->d[0]->core.tid,q->d[0]->core.pos);
 	//fprintf(stderr,"@@@@@@info\t%d\t%d\n",q->d[0]->core.pos+1,q->l);
 	//totaldups += q->l -1;
@@ -727,7 +726,10 @@ void do_magic(queue_t *q,bam_hdr_t *hdr,samFile *fp,samFile *fp2,samFile *nodupF
 
 	//first loop over all reads(these have the same chr/pos, and group these into queues that are pertile,perlib,pereverything)
 	for(int i=0;i<q->l;i++) {
+
 		b = q->d[i];
+	  if(out5)
+	    ASSERT(sam_write1(out5, hdr,b)>=0);
 		if(0&&!(b->core.flag &BAM_FDUP)){//never do this,
 			if(fp)
 				ASSERT(sam_write1(fp, hdr,b)>=0);
@@ -1128,7 +1130,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 
 		if(queue->l>1 &&(queue->d[0]->core.tid!=b->core.tid ||(queue->d[0]->core.pos!=b->core.pos))){
 			//fprintf(stderr,"calling do_magic\n");
-			do_magic(queue,hdr,out,out2,nodupFP,coordtype, xLength, yLength, nTiles);
+		  do_magic(queue,hdr,out,out2,nodupFP,coordtype, xLength, yLength, nTiles,out5);
 			queue->l =0;
 		}
 
@@ -1149,7 +1151,7 @@ void parse_sequencingdata(char *fn_out,char *refName,char *fname, int stats_nopr
 		CMA = (queue->d[0]->core.l_qseq+(purecount-1)*CMA)/(1.0*purecount);
 	}else{
 		//fprintf(stderr,"calling do_magic\n");
-		do_magic(queue,hdr,out,out2,nodupFP,coordtype,xLength, yLength, nTiles);
+	  do_magic(queue,hdr,out,out2,nodupFP,coordtype,xLength, yLength, nTiles,out5);
 	}
 	queue->l=0;
 	if(out){
